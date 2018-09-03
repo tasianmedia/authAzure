@@ -1,0 +1,75 @@
+{
+  "name": "authAzure",
+  "lowCaseName": "authazure",
+  "description": "An Azure Active Directory Extra for MODX Revolution.",
+  "author": "David Pede <dev@tasian.media> <https://twitter.com/davepede>",
+  "version": "1.0.0-beta",
+  "package": {
+    "actions": [
+      {
+        "id": 1,
+        "controller": "index"
+      }
+    ],
+    "elements": {
+      "categories": [
+        {
+          "name": "Debug"
+        }
+      ],
+      "plugins": [
+        {
+          "name": "authAzure",
+          "file": "plugin.authazure.php",
+          "events": [
+            "OnHandleRequest",
+            "OnWebAuthentication"
+          ]
+        }
+      ]
+    },
+    "systemSettings": [
+      {
+        "key": "assets_url",
+        "type": "textfield",
+        "area": "default",
+        "value": "{assets_url}components/authazure/"
+      },{
+        "key": "client_id",
+        "type": "textfield",
+        "area": "Azure Configuration",
+        "value": ""
+      },{
+        "key": "client_secret",
+        "type": "textfield",
+        "area": "Azure Configuration",
+        "value": ""
+      },{
+        "key": "redirect_url",
+        "type": "textfield",
+        "area": "Azure Configuration",
+        "value": ""
+      },{
+        "key": "openid_config_url",
+        "type": "textfield",
+        "area": "Azure Configuration",
+        "value": ""
+      },{
+        "key": "enable_sso",
+        "type": "combo-boolean",
+        "area": "Single Sign On",
+        "value": "0"
+      }
+    ]
+  },
+  "database": {
+    "tables": [
+      "AazProfile"
+    ]
+  },
+  "build": {
+    "readme": "docs/readme.txt",
+    "license": "docs/license.txt",
+    "changelog": "docs/changelog.txt"
+  }
+}

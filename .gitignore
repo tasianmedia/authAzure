@@ -1,0 +1,19 @@
+_build/build.config.php
+config.core.php
+
+# ignore grunt files
+node_modules
+
+# ignore composer files
+composer.phar
+composer.lock
+
+# ignore yarn files
+yarn.lock
+
+# ignore dev files
+_dev/
+/.idea
+
+# ignore composer vendor dir
+/core/components/authazure/vendors
