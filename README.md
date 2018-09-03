@@ -2,7 +2,7 @@
 ### An Azure Active Directory Extra for MODX Revolution.
 #### Installation
 Whilst in beta you can:
-- Download the latest build from the [_packages](../blob/develop/_packages/) folder and upload manually to your MODX Package Manager.
+- Download the latest build from the [_packages](../develop/_packages/) folder and upload manually to your MODX Package Manager.
 - Install via 'Git Package Management' Extra: https://github.com/theboxer/Git-Package-Management
 - Fork and clone this repository using your software of choice
 
