@@ -2,7 +2,7 @@
 ### An Azure Active Directory Extra for MODX Revolution.
 #### Installation
 Whilst in beta you can:
-- Download the latest build from the [_packages](../blob/master/_packages/) folder and upload manually to your MODX Package Manager.
+- Download the latest build from the [_packages](../blob/develop/_packages/) folder and upload manually to your MODX Package Manager.
 - Install via 'Git Package Management' Extra: https://github.com/theboxer/Git-Package-Management
 - Fork and clone this repository using your software of choice
 
@@ -17,6 +17,9 @@ If you have a bug fix or improvement and would like to submit a Pull Request, pl
 Author: David Pede (dev@tasian.media) (https://twitter.com/davepede)
 
 Copyright: (C) 2018 Tasian Media. All rights reserved. (dev@tasian.media)
+
+#### Please Note
+authAzure is not associated with or endorsed by Microsoft Corporation.
 
 #### License
 Released under the GNU General Public License; either version 2 of the License, or (at your option) any later version.
