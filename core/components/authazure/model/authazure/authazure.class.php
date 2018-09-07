@@ -36,7 +36,7 @@ class AuthAzure
     }
 
     /**
-     * Checks user and logs them in. Also creates/updates user profile
+     * Authenticates user and logs them in. Also creates/updates user profile
      *
      * @return void
      */
@@ -49,61 +49,74 @@ class AuthAzure
             // Check if new or existing user
             $username = $id_token['email'];
             if ($this->modx->getCount('modUser', array('username' => $username))) {
-                //$this->modx->log(modX::LOG_LEVEL_ERROR, $username . ' - EXISTS');
-                // check existing access token - refresh if needed
-                // get AAD profile
-                // create profile
-                // extended fields - https://github.com/modxcms/Login/blob/master/core/components/login/processors/register.php#L113
-                // update user
-                // login
-            } else {
                 try {
-                    // get access token for new user
-                    $token = $provider->getAccessToken('authorization_code', [
-                        'code' => $_REQUEST['code']
-                    ]);
-                    // get AAD profile
-                    $aadProfile = $this->getApi('https://graph.microsoft.com/beta/me', $token, $provider);
-                    $aadProfile['photoUrl'] = $this->getProfilePhoto($aadProfile['mailNickname'], $token, $provider);
-                    // prep new user
-                    $newUser = array(
-                        'username' => $id_token['email'],
-                        'fullname' => $aadProfile['givenName'] . ' ' . $aadProfile['surname'],
-                        'email' => $aadProfile['mail'],
-                        'photo' => $aadProfile['photoUrl'],
-                        'phone' => $aadProfile['businessPhones'][0],
-                        'mobilephone' => $aadProfile['mobilePhone'],
+                    // get user details
+                    $user = $this->modx->getObject('modUser', array('username' => $username));
+                    $aaz_profile = $this->modx->getObject('AazProfile', array('user_id' => $user->get('id'))); //TODO add error logging
+                    $token = unserialize($aaz_profile->get('token'));
+                    if ($token->hasExpired()) {
+                        $exp_token = $token;
+                        $token = '';
+                        if ($exp_token->getRefreshToken()) {
+                            try {
+                                $token = $provider->getAccessToken('refresh_token', [
+                                    'refresh_token' => $exp_token->getRefreshToken() //TODO document - app must request and be granted the offline_access scope https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-id-and-access-tokens
+                                ]);
+                            } catch (Exception $e) {
+                                $this->exceptionHandler($e, __LINE__);
+                            }
+                        }
+                        if (!$token) {
+                            $token = $provider->getAccessToken('authorization_code', [
+                                'code' => $_REQUEST['code']
+                            ]);
+                        }
+                        $aaz_profile->set('token', serialize($token));
+                        $aaz_profile->save();
+                    }
+                    //get profile
+                    $ad_profile = $this->getApi('https://graph.microsoft.com/beta/me', $token, $provider);
+                    try {
+                        $ad_profile['photoUrl'] = $this->getProfilePhoto($ad_profile['mailNickname'], $token, $provider);
+                    } catch (Exception $e) {
+                        $this->exceptionHandler($e, __LINE__);
+                    }
+                    $user_data = array(
+                        'id' => $user->get('id'),
+                        'username' => $username,
+                        'fullname' => $ad_profile['givenName'] . ' ' . $ad_profile['surname'],
+                        'email' => $ad_profile['mail'],
+                        'phone' => $ad_profile['businessPhones'][0],
                         'groups' => 'Staff', //TODO sync user groups from aad
-                        'active' => 1,
+                        'active' => 1
                     );
-                    //create user
-                    $response = $this->runProcessor('web/user/create', $newUser);
+                    //update user
+                    $response = $this->runProcessor('web/user/update', $user_data);
                     if ($response->isError()) {
                         $msg = implode(', ', $response->getAllErrors());
                         $this->modx->log(modX::LOG_LEVEL_ERROR, //TODO move to custom exception handler
-                            '[authAzure] -  Unable to create user ' . print_r($newUser, true) . '. Message: ' . $msg
+                            '[authAzure] -  User update failed ' . print_r($user_data, true) . '. Message: ' . $msg
                         );
+                        //TODO add error page redirect
                     } else {
                         //TODO add md5 hash for profile comparison
-                        $uid = $response->response['object']['id'];
-                        $username = $response->response['object']['username'];
-                        $response = $this->runProcessor('web/profile/create', array(
-                            'user_id' => $uid,
-                            'data' => serialize($aadProfile),
-                            'token' => serialize($token)
+                        $response = $this->runProcessor('web/profile/update', array(
+                            'id' => $aaz_profile->get('id'),
+                            'data' => serialize($ad_profile)
                         ));
                         if ($response->isError()) {
                             $msg = implode(', ', $response->getAllErrors());
                             $this->modx->log(modX::LOG_LEVEL_ERROR, //TODO move to custom exception handler
-                                '[authAzure] -  Unable to create AAD Profile ' . print_r($newUser, true) . '. Message: ' . $msg
+                                '[authAzure] -  Unable to update authAzure Profile ' . print_r($user_data, true) . '. Message: ' . $msg
                             );
+                            //TODO add error page redirect
                         } else {
                             //login
                             $login_data = [
                                 'username' => $username,
                                 'password' => md5(rand()),
                                 'rememberme' => true,
-                                'login_context' => $this->config['ctx']
+                                'login_context' => $this->config['ctx'] //TODO add sys setting support
                             ];
                             $_SESSION['authAzure']['verified'] = true;
                             $response = $this->modx->runProcessor('security/login', $login_data);
@@ -111,22 +124,96 @@ class AuthAzure
                                 $msg = implode(', ', $response->getAllErrors());
                                 $this->modx->log(modX::LOG_LEVEL_ERROR, //TODO move to custom exception handler
                                     '[authAzure] -  Login error for user ' . $login_data['username'] . '. Message: ' . $msg);
+                                //TODO add error page redirect
                             } else {
                                 //redirect AFTER login
                                 if (isset($_SESSION['authAzure']['redirectUrl'])) {
                                     $this->modx->sendRedirect($_SESSION['authAzure']['redirectUrl']);
-                                    $this->modx->log(modX::LOG_LEVEL_ERROR, 'url: ' . print_r($_SESSION['authAzure']['redirectUrl'], true));
                                     unset($_SESSION['authAzure']['redirectUrl']);
                                 }
                             }
                         }
                     }
                 } catch (Exception $e) {
-                    $this->exceptionHandler($e);
+                    $this->exceptionHandler($e, __LINE__);
+                    //TODO add error page redirect
+                }
+            } else {
+                try {
+                    $token = $provider->getAccessToken('authorization_code', [
+                        'code' => $_REQUEST['code']
+                    ]);
+                    //get profile
+                    $ad_profile = $this->getApi('https://graph.microsoft.com/beta/me', $token, $provider);
+                    try {
+                        $ad_profile['photoUrl'] = $this->getProfilePhoto($ad_profile['mailNickname'], $token, $provider);
+                    } catch (Exception $e) {
+                        $this->exceptionHandler($e, __LINE__);
+                    }
+                    $user_data = array(
+                        'username' => $username,
+                        'fullname' => $ad_profile['givenName'] . ' ' . $ad_profile['surname'],
+                        'email' => $ad_profile['mail'],
+                        'phone' => $ad_profile['businessPhones'][0],
+                        'groups' => 'Staff', //TODO sync user groups from aad
+                        'active' => 1,
+                    );
+                    //create user
+                    $response = $this->runProcessor('web/user/create', $user_data);
+                    if ($response->isError()) {
+                        $msg = implode(', ', $response->getAllErrors());
+                        $this->modx->log(modX::LOG_LEVEL_ERROR, //TODO move to custom exception handler
+                            '[authAzure] -  Unable to create user ' . print_r($user_data, true) . '. Message: ' . $msg
+                        );
+                        //TODO add error page redirect
+                    } else {
+                        //TODO add md5 hash for profile comparison
+                        $uid = $response->response['object']['id'];
+                        $username = $response->response['object']['username'];
+                        $response = $this->runProcessor('web/profile/create', array(
+                            'user_id' => $uid,
+                            'data' => serialize($ad_profile),
+                            'token' => serialize($token)
+                        ));
+                        if ($response->isError()) {
+                            $msg = implode(', ', $response->getAllErrors());
+                            $this->modx->log(modX::LOG_LEVEL_ERROR, //TODO move to custom exception handler
+                                '[authAzure] -  Unable to create authAzure Profile ' . print_r($user_data, true) . '. Message: ' . $msg
+                            );
+                            //TODO add error page redirect
+                        } else {
+                            //login
+                            $login_data = [
+                                'username' => $username,
+                                'password' => md5(rand()),
+                                'rememberme' => true,
+                                'login_context' => $this->config['ctx'] //TODO add sys setting support
+                            ];
+                            $_SESSION['authAzure']['verified'] = true;
+                            $response = $this->modx->runProcessor('security/login', $login_data);
+                            if ($response->isError()) {
+                                $msg = implode(', ', $response->getAllErrors());
+                                $this->modx->log(modX::LOG_LEVEL_ERROR, //TODO move to custom exception handler
+                                    '[authAzure] -  Login error for user ' . $login_data['username'] . '. Message: ' . $msg);
+                                //TODO add error page redirect
+                            } else {
+                                //redirect AFTER login
+                                if (isset($_SESSION['authAzure']['redirectUrl'])) {
+                                    $this->modx->sendRedirect($_SESSION['authAzure']['redirectUrl']);
+                                    unset($_SESSION['authAzure']['redirectUrl']);
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception $e) {
+                    $this->modx->log(modX::LOG_LEVEL_ERROR, '[authAzure] -  Main Catch Block ');
+                    $this->exceptionHandler($e, __LINE__);
+                    //TODO add error page redirect
                 }
             }
         } else {
             $this->modx->log(modX::LOG_LEVEL_ERROR, 'user is NOT authorised');
+            //TODO add error page redirect
         }
     }
 
@@ -150,17 +237,19 @@ class AuthAzure
             $provider = new TheNetworg\OAuth2\Client\Provider\Azure($providerConfig);
             return $provider;
         } catch (Exception $e) {
-            $this->exceptionHandler($e);
+            $this->exceptionHandler($e, __LINE__);
         }
     }
+
     /**
      * Custom exception handler
      *
      * @param Throwable $e
+     * @param string $line
      *
      * @return void;
      */
-    public function exceptionHandler(Throwable $e)
+    public function exceptionHandler(Throwable $e, string $line)
     {
         $code = $e->getCode();
         if ($code <= 6) {
@@ -168,15 +257,16 @@ class AuthAzure
         } else {
             $level = modX::LOG_LEVEL_INFO;
         }
-        $this->modx->log($level, '[authAzure] - ' . $e->getMessage() . ' on Line ' . $e->getLine());
-        $this->modx->sendRedirect($this->modx->makeUrl($this->modx->getOption('site_start'), '', '', 'full')); //TODO change to custom error page
+        $this->modx->log($level, '[authAzure] - ' . $e->getMessage() . ' on Line ' . $line, '', '', '', $line); //TODO $line ignored - log modx issue
+        //$this->modx->sendRedirect($this->modx->makeUrl($this->modx->getOption('site_start'), '', '', 'full')); //TODO change to custom error page
     }
+
     /**
      * Authenticates the user against provider and returns verified id_token
      *
      * @param object $provider - Object containing provider config
      *
-     * @return array|bool
+     * @return array|boolean
      */
     public function userAuth($provider)
     {
@@ -184,15 +274,14 @@ class AuthAzure
             try {
                 $nonce = md5(rand());
                 $authorizationUrl = $provider->getAuthorizationUrl([
-                    'scope' => [
-                        'openid', 'email', 'profile',
-                        'https://graph.microsoft.com/user.read',
-                        'https://graph.microsoft.com/user.read.all',
+                    'scope' => [ //TODO move to sys setting
+                        'openid', 'email', 'profile', 'offline_access',
+                        'https://graph.microsoft.com/user.read'
                     ],
                     'nonce' => $nonce
                 ]);
             } catch (Exception $e) {
-                $this->exceptionHandler($e);
+                $this->exceptionHandler($e, __LINE__);
             }
             // Get the state generated for you and store it to the session.
             $_SESSION['oauth2state'] = $provider->getState();
@@ -216,6 +305,7 @@ class AuthAzure
         }
         return false;
     }
+
     /**
      * Returns clean redirect url
      *
@@ -224,7 +314,7 @@ class AuthAzure
     public function getRedirectUrl()
     {
         $request = preg_replace('#^' . $this->modx->getOption('base_url') . '#', '', strtok($_SERVER['REQUEST_URI'], '?'));
-        $query_str = strtok( '' ); //gets the rest
+        $query_str = strtok(''); //gets the rest
         if ($query_str !== false) {
             parse_str($query_str, $query_arr);
             if (!empty($query_arr['authAzure_action'])) {
@@ -239,6 +329,7 @@ class AuthAzure
         $url = preg_replace('#["\']#', '', strip_tags($url));
         return $url;
     }
+
     /**
      * Returns Microsoft Graph response
      *
@@ -247,7 +338,7 @@ class AuthAzure
      * @param object $provider - Object containing provider config
      *
      * @return array
-     * @throws
+     * @throws exception
      */
     public function getApi($url, $token, $provider)
     {
@@ -260,15 +351,16 @@ class AuthAzure
             throw $e;
         }
     }
+
     /**
      * Returns profile photo url
      *
-     * @param string $filename - API Endpoint URL
+     * @param string $filename - Filename to use for saved image
      * @param string $token - Access Token
      * @param object $provider - Object containing provider config
      *
      * @return string
-     * @throws
+     * @throws exception
      */
     public function getProfilePhoto($filename, $token, $provider)
     {
@@ -285,6 +377,7 @@ class AuthAzure
             throw $e;
         }
     }
+
     /**
      * Shorthand for load and run custom processor
      *
