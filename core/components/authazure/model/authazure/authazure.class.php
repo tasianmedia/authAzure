@@ -86,7 +86,6 @@ class AuthAzure
                         'username' => $username,
                         'fullname' => $ad_profile['givenName'] . ' ' . $ad_profile['surname'],
                         'email' => $ad_profile['mail'],
-                        'phone' => $ad_profile['businessPhones'][0],
                         'groups' => 'Staff', //TODO sync user groups from aad
                         'active' => 1
                     );
@@ -154,7 +153,6 @@ class AuthAzure
                         'username' => $username,
                         'fullname' => $ad_profile['givenName'] . ' ' . $ad_profile['surname'],
                         'email' => $ad_profile['mail'],
-                        'phone' => $ad_profile['businessPhones'][0],
                         'groups' => 'Staff', //TODO sync user groups from aad
                         'active' => 1,
                     );
