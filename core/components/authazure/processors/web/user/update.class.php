@@ -54,7 +54,6 @@ class authAzureUserUpdateProcessor extends modUserUpdateProcessor
             /** @var modUserGroupMember $row */
             $rows = $this->modx->getCollection('modUserGroupMember', $query);
             foreach ($rows as $row) {
-                $this->modx->log(xPDO::LOG_LEVEL_ERROR, 'Label: ' . print_r($row->toArray(), true));
                 $row->remove();
             }
         }
