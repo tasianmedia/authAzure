@@ -30,21 +30,37 @@ class authAzureUserUpdateProcessor extends modUserUpdateProcessor
         }
         return parent::beforeSet();
     }
+
     /**
      * @return array
      */
     public function setUserGroups()
     {
-        //TODO separate azure ad groups and modx groups
         $memberships = array();
-        $groups = $this->getProperty('groups', null);
-        if ($groups !== null) {
-            //remove all memberships
-            //TODO join modUserGroup and filter against a parent id to limit query to azure ad groups only
-            $this->modx->removeCollection('modUserGroupMember', array('member' => $this->getProperty('id')));
-            //sync user groups
-            $groups = explode(',', $groups);
-            foreach ($groups as $tmp) {
+
+        $defaultGroups = $this->getProperty('defaultGroups', null);
+        $adGroups = $this->getProperty('adGroups', null);
+        $adGroupsParent = $this->getProperty('adGroupsParent', 0);
+
+        //remove all ad group memberships
+        if ($adGroupsParent) {
+            $query = $this->modx->newQuery('modUserGroupMember');
+            $query->leftJoin('modUserGroup', 'UserGroup');
+            $query->select(array('modUserGroupMember.*,UserGroup.parent'));
+            $query->where(array(
+                'member' => $this->getProperty('id'),
+                'UserGroup.parent' => $adGroupsParent
+            ));
+            /** @var modUserGroupMember $row */
+            $rows = $this->modx->getCollection('modUserGroupMember', $query);
+            foreach ($rows as $row) {
+                $this->modx->log(xPDO::LOG_LEVEL_ERROR, 'Label: ' . print_r($row->toArray(), true));
+                $row->remove();
+            }
+        }
+        if ($defaultGroups !== null) {
+            $defaultGroups = explode(',', $defaultGroups);
+            foreach ($defaultGroups as $tmp) {
                 @list($group, $role, $rank) = explode(':', $tmp);
                 if (empty($role)) {
                     $role = 1;
@@ -60,13 +76,39 @@ class authAzureUserUpdateProcessor extends modUserUpdateProcessor
                     $newGroup->save();
                 }
                 if ($tmp = $this->modx->getObject('modUserGroup', array('name' => $group))) {
+                    if (!$this->object->isMember($group)) {
+                        $gid = $tmp->get('id');
+                        /** @var modUserGroupMember $membership */
+                        $membership = $this->modx->newObject('modUserGroupMember');
+                        $membership->set('user_group', $gid);
+                        $membership->set('role', $role);
+                        $membership->set('member', $this->object->get('id'));
+                        $membership->set('rank', $rank);
+                        $membership->save();
+                        $memberships[] = $membership;
+                    }
+                }
+            }
+        }
+        if ($adGroups) {
+            $adGroups = explode(',', $adGroups);
+            foreach ($adGroups as $group) {
+                //create group if new
+                if ($this->modx->getCount('modUserGroup', array('name' => $group)) === 0) {
+                    /** @var modUserGroup $newGroup */
+                    $newGroup = $this->modx->newObject('modUserGroup');
+                    $newGroup->set('name', $group);
+                    $newGroup->set('parent', $adGroupsParent);
+                    $newGroup->save();
+                }
+                if ($tmp = $this->modx->getObject('modUserGroup', array('name' => $group))) {
                     $gid = $tmp->get('id');
                     /** @var modUserGroupMember $membership */
                     $membership = $this->modx->newObject('modUserGroupMember');
                     $membership->set('user_group', $gid);
-                    $membership->set('role', $role);
-                    $membership->set('member', $this->getProperty('id'));
-                    $membership->set('rank', $rank);
+                    $membership->set('role', 1);
+                    $membership->set('member', $this->object->get('id'));
+                    $membership->set('rank', 2);
                     $membership->save();
                     $memberships[] = $membership;
                 }

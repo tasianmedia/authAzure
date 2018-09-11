@@ -15,5 +15,12 @@ $_lang['setting_authazure.redirect_url'] = 'Redirect URL';
 $_lang['setting_authazure.redirect_url_desc'] = 'Default URL to which Azure AD will redirect the user after obtaining authorization';
 $_lang['setting_authazure.openid_config_url'] = 'OpenID Connect Metadata';
 $_lang['setting_authazure.openid_config_url_desc'] = 'URL for your OpenID Connect metadata document';
+
 $_lang['setting_authazure.enable_sso'] = 'Enable Single Sign-on';
-$_lang['setting_authazure.enable_sso_desc'] = 'If enabled all non mgr contexts will require user authentication';
+$_lang['setting_authazure.enable_sso_desc'] = 'If enabled all non mgr contexts will require user authentication unless overridden via context settings.';
+
+$_lang['setting_authazure.enable_group_sync'] = 'Enable Azure AD User Group Sync';
+$_lang['setting_authazure.enable_group_sync_desc'] = 'To enable auto synchronised Azure Active Directory user group memberships, select a parent group to contain the synced groups.';
+
+$_lang['setting_authazure.default_groups'] = 'Default MODX User Groups ';
+$_lang['setting_authazure.default_groups_desc'] = 'A comma separated list of user group names which authenticated users will be given membership to upon login. You can also include optional \'Role\' ID and \'Rank\' number for each group using the format - \'Group1Name:role:rank,Group2Name:role:rank\'';

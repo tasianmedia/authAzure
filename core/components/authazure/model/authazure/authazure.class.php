@@ -29,7 +29,8 @@ class AuthAzure
             'connectorUrl' => $assetsUrl . 'connector.php',
 
             'addContexts' => '', //FIXME Convert to system setting
-            'groups' => 'Staff', //FIXME Convert to system setting
+            'defaultGroups' => $this->modx->getOption('authazure.default_groups'),
+            'adGroupSync' => $this->modx->getOption('authazure.enable_group_sync'),
 
         ), $config);
         $this->modx->addPackage('authazure', $this->config['modelPath']);
@@ -42,6 +43,7 @@ class AuthAzure
      */
     public function Login()
     {
+        //TODO check if mgr user and if yes addSessionContext
         $provider = $this->loadProvider();
         $id_token = $this->userAuth($provider);
 
@@ -74,7 +76,7 @@ class AuthAzure
                         $aaz_profile->set('token', serialize($token));
                         $aaz_profile->save();
                     }
-                    //get profile
+                    //get active directory profile
                     $ad_profile = $this->getApi('https://graph.microsoft.com/beta/me', $token, $provider);
                     try {
                         $ad_profile['photoUrl'] = $this->getProfilePhoto($ad_profile['mailNickname'], $token, $provider);
@@ -86,9 +88,19 @@ class AuthAzure
                         'username' => $username,
                         'fullname' => $ad_profile['givenName'] . ' ' . $ad_profile['surname'],
                         'email' => $ad_profile['mail'],
-                        'groups' => 'Staff', //TODO sync user groups from aad
+                        'defaultGroups' => $this->config['defaultGroups'],
                         'active' => 1
                     );
+                    //sync active directory groups
+                    if ($this->config['adGroupSync']) {
+                        try {
+                            $group_arr = $this->getApi('https://graph.microsoft.com/v1.0/me/memberOf?$select=displayName', $token, $provider);
+                            $user_data['adGroupsParent'] = $this->config['adGroupSync'];
+                            $user_data['adGroups'] = implode(',',array_column($group_arr['value'], 'displayName'));
+                        } catch (Exception $e) {
+                            $this->exceptionHandler($e, __LINE__);
+                        }
+                    }
                     //update user
                     $response = $this->runProcessor('web/user/update', $user_data);
                     if ($response->isError()) {
@@ -98,7 +110,6 @@ class AuthAzure
                         );
                         //TODO add error page redirect
                     } else {
-                        //TODO add md5 hash for profile comparison
                         $response = $this->runProcessor('web/profile/update', array(
                             'id' => $aaz_profile->get('id'),
                             'data' => serialize($ad_profile)
@@ -142,7 +153,7 @@ class AuthAzure
                     $token = $provider->getAccessToken('authorization_code', [
                         'code' => $_REQUEST['code']
                     ]);
-                    //get profile
+                    //get active directory profile
                     $ad_profile = $this->getApi('https://graph.microsoft.com/beta/me', $token, $provider);
                     try {
                         $ad_profile['photoUrl'] = $this->getProfilePhoto($ad_profile['mailNickname'], $token, $provider);
@@ -153,9 +164,19 @@ class AuthAzure
                         'username' => $username,
                         'fullname' => $ad_profile['givenName'] . ' ' . $ad_profile['surname'],
                         'email' => $ad_profile['mail'],
-                        'groups' => 'Staff', //TODO sync user groups from aad
+                        'defaultGroups' => $this->config['defaultGroups'],
                         'active' => 1,
                     );
+                    //sync active directory groups
+                    if ($this->config['adGroupSync']) {
+                        try {
+                            $group_arr = $this->getApi('https://graph.microsoft.com/v1.0/me/memberOf?$select=displayName', $token, $provider);
+                            $user_data['adGroupsParent'] = $this->config['adGroupSync'];
+                            $user_data['adGroups'] = implode(',',array_column($group_arr['value'], 'displayName'));
+                        } catch (Exception $e) {
+                            $this->exceptionHandler($e, __LINE__);
+                        }
+                    }
                     //create user
                     $response = $this->runProcessor('web/user/create', $user_data);
                     if ($response->isError()) {
@@ -165,7 +186,6 @@ class AuthAzure
                         );
                         //TODO add error page redirect
                     } else {
-                        //TODO add md5 hash for profile comparison
                         $uid = $response->response['object']['id'];
                         $username = $response->response['object']['username'];
                         $response = $this->runProcessor('web/profile/create', array(
@@ -274,7 +294,8 @@ class AuthAzure
                 $authorizationUrl = $provider->getAuthorizationUrl([
                     'scope' => [ //TODO move to sys setting
                         'openid', 'email', 'profile', 'offline_access',
-                        'https://graph.microsoft.com/user.read'
+                        'https://graph.microsoft.com/User.Read',
+                        'https://graph.microsoft.com/Directory.Read.All'
                     ],
                     'nonce' => $nonce
                 ]);
@@ -295,6 +316,7 @@ class AuthAzure
             unset($_SESSION['oauth2state']);
             unset($_SESSION['authAzure']['active']);
             if (isset($_REQUEST['id_token'])) { //add nonce check here and maybe signature check as well
+                //TODO decode token using resourceOwner instead
                 $id_array = explode('.', $_REQUEST['id_token']);
                 $id_array[1] = base64_decode($id_array[1]);
                 $id_token = json_decode($id_array[1], true);
