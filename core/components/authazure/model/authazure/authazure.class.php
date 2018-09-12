@@ -43,8 +43,8 @@ class AuthAzure
      */
     public function Login()
     {
-        $this->init();
         try {
+            $this->init();
             $provider = $this->loadProvider();
             $id_token = $this->userAuth($provider);
         } catch (Exception $e) {
@@ -224,14 +224,16 @@ class AuthAzure
      * Initial checks before auth flow
      *
      * @return void;
+     * @throws exception
      */
     public function init()
     {
-        if (!$this->config['loginResourceId']) {
-            $msg = 'User authentication aborted. Login Resource ID not found in system settings but is required.';
-            $this->modx->log(modX::LOG_LEVEL_ERROR, '[authAzure] - Message: ' . $msg);
-            $this->modx->sendRedirect($this->modx->makeUrl($this->modx->getOption('site_start'), $this->config['ctx'], '', 'full'));
-            exit;
+        try {
+            if (!$this->config['loginResourceId']) {
+                throw new Exception('User authentication aborted. Login Resource ID not found in system settings but is required.');
+            }
+        } catch (Exception $e) {
+            throw $e;
         }
     }
 
@@ -298,7 +300,6 @@ class AuthAzure
             unset($_SESSION['authAzure']['active']);
             if (isset($_REQUEST['id_token'])) {
                 //TODO add nonce check
-                //TODO decode token using resourceOwner instead
                 $id_array = explode('.', $_REQUEST['id_token']);
                 $id_array[1] = base64_decode($id_array[1]);
                 $id_token = json_decode($id_array[1], true);
@@ -354,7 +355,11 @@ class AuthAzure
         if ($fatal) {
             unset($_SESSION['authAzure']);
             $_SESSION['authAzure']['error'] = true;
-            $this->modx->sendRedirect($this->modx->makeUrl($this->config['loginResourceId'], '', '', 'full'));
+            if ($id = $this->config['loginResourceId']) {
+                $this->modx->sendRedirect($this->modx->makeUrl($id, '', '', 'full'));
+            } else {
+                $this->modx->sendRedirect($this->modx->makeUrl($this->modx->getOption('site_start'), '', '', 'full'));
+            }
             exit;
         }
     }
