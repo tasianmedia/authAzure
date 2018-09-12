@@ -44,10 +44,14 @@ class AuthAzure
     public function Login()
     {
         $this->init();
-        $provider = $this->loadProvider();
-        $id_token = $this->userAuth($provider);
+        try {
+            $provider = $this->loadProvider();
+            $id_token = $this->userAuth($provider);
+        } catch (Exception $e) {
+            $this->exceptionHandler($e, __LINE__, true);
+        }
 
-        if ($id_token) {
+        if (isset($id_token) && $id_token) {
             // Check if new or existing user
             $username = $id_token['email'];
             if ($this->modx->getCount('modUser', array('username' => $username))) {
@@ -105,53 +109,44 @@ class AuthAzure
                     $response = $this->runProcessor('web/user/update', $user_data);
                     if ($response->isError()) {
                         $msg = implode(', ', $response->getAllErrors());
-                        $this->modx->log(modX::LOG_LEVEL_ERROR, //TODO move to custom exception handler
-                            '[authAzure] -  User update failed ' . print_r($user_data, true) . '. Message: ' . $msg
-                        );
-                        //TODO add error page redirect
-                    } else {
-                        $response = $this->runProcessor('web/profile/update', array(
-                            'id' => $aaz_profile->get('id'),
-                            'data' => serialize($ad_profile)
-                        ));
+                        throw new Exception('Update user failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
+                    }
+                    //update profile
+                    $response = $this->runProcessor('web/profile/update', array(
+                        'id' => $aaz_profile->get('id'),
+                        'data' => serialize($ad_profile)
+                    ));
+                    if ($response->isError()) {
+                        $msg = implode(', ', $response->getAllErrors());
+                        throw new Exception('Update user profile failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
+                    }
+                    if (!$user->isMember('Administrator')) { //FIXME Convert to system setting
+                        //login
+                        $login_data = [
+                            'username' => $username,
+                            'password' => md5(rand()),
+                            'rememberme' => false,
+                            'login_context' => $this->config['ctx']
+                        ];
+                        $_SESSION['authAzure']['verified'] = true;
+                        $response = $this->modx->runProcessor('security/login', $login_data);
                         if ($response->isError()) {
                             $msg = implode(', ', $response->getAllErrors());
-                            $this->modx->log(modX::LOG_LEVEL_ERROR, //TODO move to custom exception handler
-                                '[authAzure] -  Unable to update authAzure Profile ' . print_r($user_data, true) . '. Message: ' . $msg
-                            );
-                            //TODO add error page redirect
-                        } else {
-                            if (!$user->isMember('Administrator')) { //FIXME Convert to system setting
-                                //login
-                                $login_data = [
-                                    'username' => $username,
-                                    'password' => md5(rand()),
-                                    'rememberme' => false,
-                                    'login_context' => $this->config['ctx']
-                                ];
-                                $_SESSION['authAzure']['verified'] = true;
-                                $response = $this->modx->runProcessor('security/login', $login_data);
-                                if ($response->isError()) {
-                                    $msg = implode(', ', $response->getAllErrors());
-                                    $this->modx->log(modX::LOG_LEVEL_ERROR, //TODO move to custom exception handler
-                                        '[authAzure] -  Login error for user ' . $login_data['username'] . '. Message: ' . $msg);
-                                    unset($_SESSION['authAzure']['redirectUrl']);
-                                }
-                            } else {
-                                //TODO look at invokeEvent to show login in manager not object_update
-                                $user->addSessionContext($this->config['ctx']);
-                                $user->addSessionContext('mgr');
-                            }
-                            //redirect after login
-                            if (isset($_SESSION['authAzure']['redirectUrl'])) {
-                                $this->modx->sendRedirect($_SESSION['authAzure']['redirectUrl']);
-                                unset($_SESSION['authAzure']['redirectUrl']);
-                            }
+                            unset($_SESSION['authAzure']['redirectUrl']);
+                            throw new Exception('Login user failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
                         }
+                    } else {
+                        //TODO look at invokeEvent to show login in manager not object_update
+                        $user->addSessionContext($this->config['ctx']);
+                        $user->addSessionContext('mgr');
+                    }
+                    //redirect after login
+                    if (isset($_SESSION['authAzure']['redirectUrl'])) {
+                        $this->modx->sendRedirect($_SESSION['authAzure']['redirectUrl']);
+                        unset($_SESSION['authAzure']['redirectUrl']);
                     }
                 } catch (Exception $e) {
-                    $this->exceptionHandler($e, __LINE__);
-                    //TODO add error page redirect
+                    $this->exceptionHandler($e, __LINE__, true);
                 }
             } else {
                 try {
@@ -186,57 +181,42 @@ class AuthAzure
                     $response = $this->runProcessor('web/user/create', $user_data);
                     if ($response->isError()) {
                         $msg = implode(', ', $response->getAllErrors());
-                        $this->modx->log(modX::LOG_LEVEL_ERROR, //TODO move to custom exception handler
-                            '[authAzure] -  Unable to create user ' . print_r($user_data, true) . '. Message: ' . $msg
-                        );
-                        //TODO add error page redirect
-                    } else {
-                        $uid = $response->response['object']['id'];
-                        $username = $response->response['object']['username'];
-                        $response = $this->runProcessor('web/profile/create', array(
-                            'user_id' => $uid,
-                            'data' => serialize($ad_profile),
-                            'token' => serialize($token)
-                        ));
-                        if ($response->isError()) {
-                            $msg = implode(', ', $response->getAllErrors());
-                            $this->modx->log(modX::LOG_LEVEL_ERROR, //TODO move to custom exception handler
-                                '[authAzure] -  Unable to create authAzure Profile ' . print_r($user_data, true) . '. Message: ' . $msg
-                            );
-                            //TODO add error page redirect
-                        } else {
-                            //login
-                            $login_data = [
-                                'username' => $username,
-                                'password' => md5(rand()),
-                                'rememberme' => false,
-                                'login_context' => $this->config['ctx']
-                            ];
-                            $_SESSION['authAzure']['verified'] = true;
-                            $response = $this->modx->runProcessor('security/login', $login_data);
-                            if ($response->isError()) {
-                                $msg = implode(', ', $response->getAllErrors());
-                                $this->modx->log(modX::LOG_LEVEL_ERROR, //TODO move to custom exception handler
-                                    '[authAzure] -  Login error for user ' . $login_data['username'] . '. Message: ' . $msg);
-                                //TODO add error page redirect
-                            } else {
-                                //redirect AFTER login
-                                if (isset($_SESSION['authAzure']['redirectUrl'])) {
-                                    $this->modx->sendRedirect($_SESSION['authAzure']['redirectUrl']);
-                                    unset($_SESSION['authAzure']['redirectUrl']);
-                                }
-                            }
-                        }
+                        throw new Exception('Create new user failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
+                    }
+                    $uid = $response->response['object']['id'];
+                    $username = $response->response['object']['username'];
+                    $response = $this->runProcessor('web/profile/create', array(
+                        'user_id' => $uid,
+                        'data' => serialize($ad_profile),
+                        'token' => serialize($token)
+                    ));
+                    if ($response->isError()) {
+                        $msg = implode(', ', $response->getAllErrors());
+                        throw new Exception('Create new user profile failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
+                    }
+                    //login
+                    $login_data = [
+                        'username' => $username,
+                        'password' => md5(rand()),
+                        'rememberme' => false,
+                        'login_context' => $this->config['ctx']
+                    ];
+                    $_SESSION['authAzure']['verified'] = true;
+                    $response = $this->modx->runProcessor('security/login', $login_data);
+                    if ($response->isError()) {
+                        $msg = implode(', ', $response->getAllErrors());
+                        unset($_SESSION['authAzure']['redirectUrl']);
+                        throw new Exception('Login new user failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
+                    }
+                    //redirect AFTER login
+                    if (isset($_SESSION['authAzure']['redirectUrl'])) {
+                        $this->modx->sendRedirect($_SESSION['authAzure']['redirectUrl']);
+                        unset($_SESSION['authAzure']['redirectUrl']);
                     }
                 } catch (Exception $e) {
-                    $this->modx->log(modX::LOG_LEVEL_ERROR, '[authAzure] -  Main Catch Block');
-                    $this->exceptionHandler($e, __LINE__);
-                    //TODO add error page redirect
+                    $this->exceptionHandler($e, __LINE__, true);
                 }
             }
-        } else {
-            $this->modx->log(modX::LOG_LEVEL_ERROR, 'user is NOT authorised');
-            //TODO add error page redirect
         }
     }
 
@@ -247,12 +227,7 @@ class AuthAzure
      */
     public function init()
     {
-        if ($login_id = $this->config['loginResourceId']) {
-            if (isset($_SESSION['authAzure']['error'])) {
-                $this->modx->sendForward($this->config['loginResourceId']);
-                exit;
-            }
-        } else {
+        if (!$this->config['loginResourceId']) {
             $msg = 'User authentication aborted. Login Resource ID not found in system settings but is required.';
             $this->modx->log(modX::LOG_LEVEL_ERROR, '[authAzure] - Message: ' . $msg);
             $this->modx->sendRedirect($this->modx->makeUrl($this->modx->getOption('site_start'), $this->config['ctx'], '', 'full'));
@@ -264,6 +239,7 @@ class AuthAzure
      * Instantiates the provider
      *
      * @return object
+     * @throws exception
      */
     public function loadProvider()
     {
@@ -280,28 +256,8 @@ class AuthAzure
             $provider = new TheNetworg\OAuth2\Client\Provider\Azure($providerConfig);
             return $provider;
         } catch (Exception $e) {
-            $this->exceptionHandler($e, __LINE__);
+            throw $e;
         }
-    }
-
-    /**
-     * Custom exception handler
-     *
-     * @param Throwable $e
-     * @param string $line
-     *
-     * @return void;
-     */
-    public function exceptionHandler(Throwable $e, string $line)
-    {
-        $code = $e->getCode();
-        if ($code <= 6) {
-            $level = modX::LOG_LEVEL_ERROR;
-        } else {
-            $level = modX::LOG_LEVEL_INFO;
-        }
-        $this->modx->log($level, '[authAzure] - ' . $e->getMessage() . ' on Line ' . $line, '', '', '', $line); //TODO $line ignored - log modx issue
-        //$this->modx->sendRedirect($this->modx->makeUrl($this->modx->getOption('site_start'), '', '', 'full')); //TODO change to custom error page
     }
 
     /**
@@ -309,7 +265,8 @@ class AuthAzure
      *
      * @param object $provider - Object containing provider config
      *
-     * @return array|boolean
+     * @return array
+     * @throws exception
      */
     public function userAuth($provider)
     {
@@ -324,31 +281,32 @@ class AuthAzure
                     ],
                     'nonce' => $nonce
                 ]);
+                // Get the state generated for you and store it to the session.
+                $_SESSION['authAzure']['oauth2state'] = $provider->getState();
+                $_SESSION['authAzure']['oauth2nonce'] = $nonce;
+                $_SESSION['authAzure']['redirectUrl'] = $this->getRedirectUrl();
+                $_SESSION['authAzure']['active'] = true;
             } catch (Exception $e) {
-                $this->exceptionHandler($e, __LINE__);
+                throw $e;
             }
-            // Get the state generated for you and store it to the session.
-            $_SESSION['oauth2state'] = $provider->getState();
-            $_SESSION['oauth2nonce'] = $nonce;
-            $_SESSION['authAzure']['redirectUrl'] = $this->getRedirectUrl();
-            $_SESSION['authAzure']['active'] = true;
-
             // Redirect the user to the authorization URL.
             $this->modx->sendRedirect($authorizationUrl);
             exit;
             // Check given state against previously stored one to mitigate CSRF attack
-        } elseif (!empty($_REQUEST['state']) && (isset($_SESSION['oauth2state']) && $_REQUEST['state'] == $_SESSION['oauth2state'])) {
-            unset($_SESSION['oauth2state']);
+        } elseif (!empty($_REQUEST['state']) && (isset($_SESSION['authAzure']['oauth2state']) && $_REQUEST['state'] == $_SESSION['authAzure']['oauth2state'])) {
+            unset($_SESSION['authAzure']['oauth2state']);
             unset($_SESSION['authAzure']['active']);
-            if (isset($_REQUEST['id_token'])) { //add nonce check here and maybe signature check as well
+            if (isset($_REQUEST['id_token'])) {
+                //TODO add nonce check
                 //TODO decode token using resourceOwner instead
                 $id_array = explode('.', $_REQUEST['id_token']);
                 $id_array[1] = base64_decode($id_array[1]);
                 $id_token = json_decode($id_array[1], true);
                 return $id_token;
             }
+            throw new Exception('ID Token not received. User authentication failed and login aborted.');
         }
-        return false;
+        throw new Exception('OAuth2 stored state mismatch. User authentication failed and login aborted.');
     }
 
     /**
@@ -373,6 +331,32 @@ class AuthAzure
         $url = $this->modx->getOption('site_url') . ltrim(rawurldecode($request), '/');
         $url = preg_replace('#["\']#', '', strip_tags($url));
         return $url;
+    }
+
+    /**
+     * Custom exception handler
+     *
+     * @param Throwable $e
+     * @param string $line
+     * @param bool $fatal (optional)
+     *
+     * @return void;
+     */
+    public function exceptionHandler(Throwable $e, string $line, bool $fatal = false)
+    {
+        $code = $e->getCode();
+        if ($code <= 6 || $fatal) {
+            $level = modX::LOG_LEVEL_ERROR;
+        } else {
+            $level = modX::LOG_LEVEL_INFO;
+        }
+        $this->modx->log($level, '[authAzure] - ' . $e->getMessage() . ' on Line ' . $line, '', '', '', $line); //TODO $line ignored - log modx issue
+        if ($fatal) {
+            unset($_SESSION['authAzure']);
+            $_SESSION['authAzure']['error'] = true;
+            $this->modx->sendRedirect($this->modx->makeUrl($this->config['loginResourceId'], '', '', 'full'));
+            exit;
+        }
     }
 
     /**
