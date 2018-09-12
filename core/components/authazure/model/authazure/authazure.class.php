@@ -28,7 +28,7 @@ class AuthAzure
             'assetsUrl' => $assetsUrl,
             'connectorUrl' => $assetsUrl . 'connector.php',
 
-            'addContexts' => '', //FIXME Convert to system setting
+            'loginResourceId' => $this->modx->getOption('authazure.login_resource_id'),
             'defaultGroups' => $this->modx->getOption('authazure.default_groups'),
             'adGroupSync' => $this->modx->getOption('authazure.enable_group_sync'),
 
@@ -43,7 +43,7 @@ class AuthAzure
      */
     public function Login()
     {
-        //TODO check if mgr user and if yes addSessionContext
+        $this->init();
         $provider = $this->loadProvider();
         $id_token = $this->userAuth($provider);
 
@@ -96,7 +96,7 @@ class AuthAzure
                         try {
                             $group_arr = $this->getApi('https://graph.microsoft.com/v1.0/me/memberOf?$select=displayName', $token, $provider);
                             $user_data['adGroupsParent'] = $this->config['adGroupSync'];
-                            $user_data['adGroups'] = implode(',',array_column($group_arr['value'], 'displayName'));
+                            $user_data['adGroups'] = implode(',', array_column($group_arr['value'], 'displayName'));
                         } catch (Exception $e) {
                             $this->exceptionHandler($e, __LINE__);
                         }
@@ -121,26 +121,31 @@ class AuthAzure
                             );
                             //TODO add error page redirect
                         } else {
-                            //login
-                            $login_data = [
-                                'username' => $username,
-                                'password' => md5(rand()),
-                                'rememberme' => true,
-                                'login_context' => $this->config['ctx'] //TODO add sys setting support
-                            ];
-                            $_SESSION['authAzure']['verified'] = true;
-                            $response = $this->modx->runProcessor('security/login', $login_data);
-                            if ($response->isError()) {
-                                $msg = implode(', ', $response->getAllErrors());
-                                $this->modx->log(modX::LOG_LEVEL_ERROR, //TODO move to custom exception handler
-                                    '[authAzure] -  Login error for user ' . $login_data['username'] . '. Message: ' . $msg);
-                                //TODO add error page redirect
-                            } else {
-                                //redirect AFTER login
-                                if (isset($_SESSION['authAzure']['redirectUrl'])) {
-                                    $this->modx->sendRedirect($_SESSION['authAzure']['redirectUrl']);
+                            if (!$user->isMember('Administrator')) { //FIXME Convert to system setting
+                                //login
+                                $login_data = [
+                                    'username' => $username,
+                                    'password' => md5(rand()),
+                                    'rememberme' => false,
+                                    'login_context' => $this->config['ctx']
+                                ];
+                                $_SESSION['authAzure']['verified'] = true;
+                                $response = $this->modx->runProcessor('security/login', $login_data);
+                                if ($response->isError()) {
+                                    $msg = implode(', ', $response->getAllErrors());
+                                    $this->modx->log(modX::LOG_LEVEL_ERROR, //TODO move to custom exception handler
+                                        '[authAzure] -  Login error for user ' . $login_data['username'] . '. Message: ' . $msg);
                                     unset($_SESSION['authAzure']['redirectUrl']);
                                 }
+                            } else {
+                                //TODO look at invokeEvent to show login in manager not object_update
+                                $user->addSessionContext($this->config['ctx']);
+                                $user->addSessionContext('mgr');
+                            }
+                            //redirect after login
+                            if (isset($_SESSION['authAzure']['redirectUrl'])) {
+                                $this->modx->sendRedirect($_SESSION['authAzure']['redirectUrl']);
+                                unset($_SESSION['authAzure']['redirectUrl']);
                             }
                         }
                     }
@@ -172,7 +177,7 @@ class AuthAzure
                         try {
                             $group_arr = $this->getApi('https://graph.microsoft.com/v1.0/me/memberOf?$select=displayName', $token, $provider);
                             $user_data['adGroupsParent'] = $this->config['adGroupSync'];
-                            $user_data['adGroups'] = implode(',',array_column($group_arr['value'], 'displayName'));
+                            $user_data['adGroups'] = implode(',', array_column($group_arr['value'], 'displayName'));
                         } catch (Exception $e) {
                             $this->exceptionHandler($e, __LINE__);
                         }
@@ -204,8 +209,8 @@ class AuthAzure
                             $login_data = [
                                 'username' => $username,
                                 'password' => md5(rand()),
-                                'rememberme' => true,
-                                'login_context' => $this->config['ctx'] //TODO add sys setting support
+                                'rememberme' => false,
+                                'login_context' => $this->config['ctx']
                             ];
                             $_SESSION['authAzure']['verified'] = true;
                             $response = $this->modx->runProcessor('security/login', $login_data);
@@ -224,7 +229,7 @@ class AuthAzure
                         }
                     }
                 } catch (Exception $e) {
-                    $this->modx->log(modX::LOG_LEVEL_ERROR, '[authAzure] -  Main Catch Block ');
+                    $this->modx->log(modX::LOG_LEVEL_ERROR, '[authAzure] -  Main Catch Block');
                     $this->exceptionHandler($e, __LINE__);
                     //TODO add error page redirect
                 }
@@ -232,6 +237,26 @@ class AuthAzure
         } else {
             $this->modx->log(modX::LOG_LEVEL_ERROR, 'user is NOT authorised');
             //TODO add error page redirect
+        }
+    }
+
+    /**
+     * Initial checks before auth flow
+     *
+     * @return void;
+     */
+    public function init()
+    {
+        if ($login_id = $this->config['loginResourceId']) {
+            if (isset($_SESSION['authAzure']['error'])) {
+                $this->modx->sendForward($this->config['loginResourceId']);
+                exit;
+            }
+        } else {
+            $msg = 'User authentication aborted. Login Resource ID not found in system settings but is required.';
+            $this->modx->log(modX::LOG_LEVEL_ERROR, '[authAzure] - Message: ' . $msg);
+            $this->modx->sendRedirect($this->modx->makeUrl($this->modx->getOption('site_start'), $this->config['ctx'], '', 'full'));
+            exit;
         }
     }
 

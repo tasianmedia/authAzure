@@ -64,6 +64,11 @@
         "type": "textfield",
         "area": "User Groups",
         "value": ""
+      },{
+        "key": "login_resource_id",
+        "type": "numberfield",
+        "area": "Resources",
+        "value": ""
       }
     ]
   },
