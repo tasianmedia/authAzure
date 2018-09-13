@@ -30,6 +30,7 @@ class AuthAzure
 
             'loginResourceId' => $this->modx->getOption('authazure.login_resource_id'),
             'defaultGroups' => $this->modx->getOption('authazure.default_groups'),
+            'adminGroups' => $this->modx->getOption('authazure.admin_groups'),
             'adGroupSync' => $this->modx->getOption('authazure.enable_group_sync'),
 
         ), $config);
@@ -57,6 +58,7 @@ class AuthAzure
             if ($this->modx->getCount('modUser', array('username' => $username))) {
                 try {
                     // get user details
+                    /** @var modUser $user */
                     $user = $this->modx->getObject('modUser', array('username' => $username));
                     if ($aaz_profile = $this->modx->getObject('AazProfile', array('user_id' => $user->get('id')))) {
                         $token = unserialize($aaz_profile->get('token'));
@@ -84,6 +86,7 @@ class AuthAzure
                         $token = $provider->getAccessToken('authorization_code', [
                             'code' => $_REQUEST['code']
                         ]);
+                        /** @var modProcessorResponse $response */
                         $response = $this->runProcessor('web/profile/create', array(
                             'user_id' => $user->get('id'),
                             'token' => serialize($token)
@@ -120,12 +123,14 @@ class AuthAzure
                         }
                     }
                     //update user
+                    /** @var modProcessorResponse $response */
                     $response = $this->runProcessor('web/user/update', $user_data);
                     if ($response->isError()) {
                         $msg = implode(', ', $response->getAllErrors());
                         throw new Exception('Update user failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
                     }
                     //update profile
+                    /** @var modProcessorResponse $response */
                     $response = $this->runProcessor('web/profile/update', array(
                         'id' => $aaz_profile->get('id'),
                         'data' => serialize($ad_profile)
@@ -134,8 +139,7 @@ class AuthAzure
                         $msg = implode(', ', $response->getAllErrors());
                         throw new Exception('Update user profile failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
                     }
-                    if (!$user->isMember('Administrator')) { //FIXME Convert to system setting
-                        //login
+                    if (!$user->isMember(explode(',',$this->config['adminGroups']))) {
                         $login_data = [
                             'username' => $username,
                             'password' => md5(rand()),
@@ -143,6 +147,7 @@ class AuthAzure
                             'login_context' => $this->config['ctx']
                         ];
                         $_SESSION['authAzure']['verified'] = true;
+                        /** @var modProcessorResponse $response */
                         $response = $this->modx->runProcessor('security/login', $login_data);
                         if ($response->isError()) {
                             $msg = implode(', ', $response->getAllErrors());
@@ -150,9 +155,7 @@ class AuthAzure
                             throw new Exception('Login user failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
                         }
                     } else {
-                        //TODO look at invokeEvent to show login in manager not object_update
                         $user->addSessionContext($this->config['ctx']);
-                        $user->addSessionContext('mgr');
                     }
                     //redirect after login
                     if (isset($_SESSION['authAzure']['redirectUrl'])) {
@@ -192,6 +195,7 @@ class AuthAzure
                         }
                     }
                     //create user
+                    /** @var modProcessorResponse $response */
                     $response = $this->runProcessor('web/user/create', $user_data);
                     if ($response->isError()) {
                         $msg = implode(', ', $response->getAllErrors());
@@ -200,6 +204,7 @@ class AuthAzure
                     $uid = $response->response['object']['id'];
                     $username = $response->response['object']['username'];
                     //create profile
+                    /** @var modProcessorResponse $response */
                     $response = $this->runProcessor('web/profile/create', array(
                         'user_id' => $uid,
                         'data' => serialize($ad_profile),
@@ -209,7 +214,6 @@ class AuthAzure
                         $msg = implode(', ', $response->getAllErrors());
                         throw new Exception('Create new user profile failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
                     }
-                    //login
                     $login_data = [
                         'username' => $username,
                         'password' => md5(rand()),
@@ -217,6 +221,7 @@ class AuthAzure
                         'login_context' => $this->config['ctx']
                     ];
                     $_SESSION['authAzure']['verified'] = true;
+                    /** @var modProcessorResponse $response */
                     $response = $this->modx->runProcessor('security/login', $login_data);
                     if ($response->isError()) {
                         $msg = implode(', ', $response->getAllErrors());
@@ -245,7 +250,10 @@ class AuthAzure
     {
         try {
             if (!$this->config['loginResourceId']) {
-                throw new Exception('User authentication aborted. Login Resource ID not found in system settings but is required.');
+                throw new Exception('User authentication aborted. Login Resource ID not found system settings but is required.');
+            }
+            if (!$this->config['adminGroups']) {
+                throw new Exception('User authentication aborted. Admin Groups not found in system settings but is required.');
             }
         } catch (Exception $e) {
             throw $e;
