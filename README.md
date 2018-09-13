@@ -1,7 +1,8 @@
-# authAzure 1.0.0-beta
+# authAzure 1.1.0-beta
 ### An Azure Active Directory Extra for MODX Revolution.
 #### Installation
-Whilst in beta you can:
+Whilst in beta:
+- DO NOT USE ON PRODUCTION WEBSITES OR MODX INSTALLS
 - Download the latest build from the [_packages](../develop/_packages/) folder and upload manually to your MODX Package Manager.
 - Install via 'Git Package Management' Extra: https://github.com/theboxer/Git-Package-Management
 - Fork and clone this repository using your software of choice

@@ -1,5 +1,16 @@
 Changelog for authAzure.
 
+authAzure 1.1.0-beta (September 13, 2018)
+====================================
+- Add sys setting lexicons
+- Add admin groups setting and checks
+- Fix missing profile issue for existing users
+- Add dbtable resolver
+- Improve error handling
+- Improve SSO flow
+- Add Active Directory user group sync feature
+- Add existing user functionality
+
 authAzure 1.0.0-beta (August 22, 2018)
 ====================================
 - Initial beta.
