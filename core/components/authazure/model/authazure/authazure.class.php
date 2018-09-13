@@ -58,27 +58,41 @@ class AuthAzure
                 try {
                     // get user details
                     $user = $this->modx->getObject('modUser', array('username' => $username));
-                    $aaz_profile = $this->modx->getObject('AazProfile', array('user_id' => $user->get('id'))); //TODO add error logging
-                    $token = unserialize($aaz_profile->get('token'));
-                    if ($token->hasExpired()) {
-                        $exp_token = $token;
-                        $token = '';
-                        if ($exp_token->getRefreshToken()) {
-                            try {
-                                $token = $provider->getAccessToken('refresh_token', [
-                                    'refresh_token' => $exp_token->getRefreshToken() //TODO document - app must request and be granted the offline_access scope https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-id-and-access-tokens
-                                ]);
-                            } catch (Exception $e) {
-                                $this->exceptionHandler($e, __LINE__);
+                    if ($aaz_profile = $this->modx->getObject('AazProfile', array('user_id' => $user->get('id')))) {
+                        $token = unserialize($aaz_profile->get('token'));
+                        if ($token->hasExpired()) {
+                            $exp_token = $token;
+                            $token = '';
+                            if ($exp_token->getRefreshToken()) {
+                                try {
+                                    $token = $provider->getAccessToken('refresh_token', [
+                                        'refresh_token' => $exp_token->getRefreshToken() //TODO document - app must request and be granted the offline_access scope https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-id-and-access-tokens
+                                    ]);
+                                } catch (Exception $e) {
+                                    $this->exceptionHandler($e, __LINE__);
+                                }
                             }
+                            if (!$token) {
+                                $token = $provider->getAccessToken('authorization_code', [
+                                    'code' => $_REQUEST['code']
+                                ]);
+                            }
+                            $aaz_profile->set('token', serialize($token));
+                            $aaz_profile->save();
                         }
-                        if (!$token) {
-                            $token = $provider->getAccessToken('authorization_code', [
-                                'code' => $_REQUEST['code']
-                            ]);
+                    } else {
+                        $token = $provider->getAccessToken('authorization_code', [
+                            'code' => $_REQUEST['code']
+                        ]);
+                        $response = $this->runProcessor('web/profile/create', array(
+                            'user_id' => $user->get('id'),
+                            'token' => serialize($token)
+                        ));
+                        if ($response->isError()) {
+                            $msg = implode(', ', $response->getAllErrors());
+                            throw new Exception('Update user profile failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
                         }
-                        $aaz_profile->set('token', serialize($token));
-                        $aaz_profile->save();
+                        $aaz_profile = $response;
                     }
                     //get active directory profile
                     $ad_profile = $this->getApi('https://graph.microsoft.com/beta/me', $token, $provider);
@@ -185,6 +199,7 @@ class AuthAzure
                     }
                     $uid = $response->response['object']['id'];
                     $username = $response->response['object']['username'];
+                    //create profile
                     $response = $this->runProcessor('web/profile/create', array(
                         'user_id' => $uid,
                         'data' => serialize($ad_profile),
