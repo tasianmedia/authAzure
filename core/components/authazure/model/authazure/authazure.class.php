@@ -52,13 +52,13 @@ class AuthAzure
         }
 
         if (isset($id_token) && $id_token) {
-            // Check if new or existing user
+            // Set critical
             $username = $id_token['email'];
-            if ($this->modx->getCount('modUser', array('username' => $username))) {
+            // Check if new or existing user
+            /** @var modUser $user */
+            if ($user = $this->modx->getObject('modUser', array('username' => $id_token['email']))) {
                 try {
-                    // get user details
-                    /** @var modUser $user */
-                    $user = $this->modx->getObject('modUser', array('username' => $username));
+                    /** @var AazProfile $aaz_profile */
                     if ($aaz_profile = $this->modx->getObject('AazProfile', array('user_id' => $user->get('id')))) {
                         $token = unserialize($aaz_profile->get('token'));
                         if ($token->hasExpired()) {
@@ -85,16 +85,11 @@ class AuthAzure
                         $token = $provider->getAccessToken('authorization_code', [
                             'code' => $_REQUEST['code']
                         ]);
-                        /** @var modProcessorResponse $response */
-                        $response = $this->runProcessor('web/profile/create', array(
+                        $aaz_profile = $this->modx->newObject('AazProfile', array(
                             'user_id' => $user->get('id'),
                             'token' => serialize($token)
                         ));
-                        if ($response->isError()) {
-                            $msg = implode(', ', $response->getAllErrors());
-                            throw new Exception('Update user profile failed: ' . print_r($username, true) . '. Message: ' . $msg);
-                        }
-                        $aaz_profile = $response;
+                        $aaz_profile->save();
                     }
                     //get active directory profile
                     $ad_profile = $this->getApi('https://graph.microsoft.com/beta/me', $token, $provider);
@@ -201,7 +196,6 @@ class AuthAzure
                         throw new Exception('Create new user failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
                     }
                     $uid = $response->response['object']['id'];
-                    $username = $response->response['object']['username'];
                     //create profile
                     /** @var modProcessorResponse $response */
                     $response = $this->runProcessor('web/profile/create', array(
