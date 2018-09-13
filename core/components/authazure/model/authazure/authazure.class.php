@@ -90,7 +90,7 @@ class AuthAzure
                         ));
                         if ($response->isError()) {
                             $msg = implode(', ', $response->getAllErrors());
-                            throw new Exception('Update user profile failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
+                            throw new Exception('Update user profile failed: ' . print_r($username, true) . '. Message: ' . $msg);
                         }
                         $aaz_profile = $response;
                     }
