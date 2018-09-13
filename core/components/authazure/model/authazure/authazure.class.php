@@ -30,9 +30,8 @@ class AuthAzure
 
             'loginResourceId' => $this->modx->getOption('authazure.login_resource_id'),
             'defaultGroups' => $this->modx->getOption('authazure.default_groups'),
-            'adminGroups' => $this->modx->getOption('authazure.admin_groups'),
+            'protectedGroups' => $this->modx->getOption('authazure.protected_groups'),
             'adGroupSync' => $this->modx->getOption('authazure.enable_group_sync'),
-
         ), $config);
         $this->modx->addPackage('authazure', $this->config['modelPath']);
     }
@@ -139,7 +138,7 @@ class AuthAzure
                         $msg = implode(', ', $response->getAllErrors());
                         throw new Exception('Update user profile failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
                     }
-                    if (!$user->isMember(explode(',',$this->config['adminGroups']))) {
+                    if (!$user->isMember(explode(',',$this->config['protectedGroups']))) {
                         $login_data = [
                             'username' => $username,
                             'password' => md5(rand()),
@@ -252,8 +251,8 @@ class AuthAzure
             if (!$this->config['loginResourceId']) {
                 throw new Exception('User authentication aborted. Login Resource ID not found system settings but is required.');
             }
-            if (!$this->config['adminGroups']) {
-                throw new Exception('User authentication aborted. Admin Groups not found in system settings but is required.');
+            if (!$this->config['protectedGroups']) {
+                throw new Exception('User authentication aborted. Protected User Groups not found in system settings but is required.');
             }
         } catch (Exception $e) {
             throw $e;

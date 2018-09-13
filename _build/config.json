@@ -65,7 +65,7 @@
         "area": "User Groups",
         "value": ""
       },{
-        "key": "admin_groups",
+        "key": "protected_groups",
         "type": "textfield",
         "area": "User Groups",
         "value": ""
