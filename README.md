@@ -1,4 +1,4 @@
-# authAzure 1.1.0-beta
+# authAzure 1.1.1-beta
 ### An Azure Active Directory Extra for MODX Revolution.
 #### Installation
 Whilst in beta:

@@ -3,7 +3,7 @@
   "lowCaseName": "authazure",
   "description": "An Azure Active Directory Extra for MODX Revolution",
   "author": "David Pede <dev@tasian.media> <https://twitter.com/davepede>",
-  "version": "1.1.0-beta",
+  "version": "1.1.1-beta",
   "package": {
     "actions": [
       {
