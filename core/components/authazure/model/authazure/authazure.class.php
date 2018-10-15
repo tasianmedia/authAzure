@@ -15,6 +15,7 @@ class AuthAzure
         $this->modx =& $modx;
         $basePath = $this->modx->getOption('authazure.core_path', $config, $this->modx->getOption('core_path') . 'components/authazure/');
         $assetsUrl = $this->modx->getOption('authazure.assets_url', $config, $this->modx->getOption('assets_url') . 'components/authazure/');
+        $this->modx->lexicon->load('authazure:default');
         $this->config = array_merge(array(
             'basePath' => $basePath,
             'corePath' => $basePath,
@@ -147,7 +148,6 @@ class AuthAzure
                         $response = $this->modx->runProcessor('security/login', $login_data);
                         if ($response->isError()) {
                             $msg = implode(', ', $response->getAllErrors());
-                            unset($_SESSION['authAzure']['redirectUrl']);
                             throw new Exception('Login user failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
                         }
                     } else {
@@ -220,7 +220,6 @@ class AuthAzure
                     $response = $this->modx->runProcessor('security/login', $login_data);
                     if ($response->isError()) {
                         $msg = implode(', ', $response->getAllErrors());
-                        unset($_SESSION['authAzure']['redirectUrl']);
                         throw new Exception('Login new user failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
                     }
                     //redirect AFTER login
@@ -356,13 +355,13 @@ class AuthAzure
      * Returns clean action url
      *
      * @param string $action - authAzure action
+     * @param bool $referer - use HTTP_REFERER to generate returned url
      *
      * @return string
      */
-    public function getActionUrl(string $action = null)
+    public function getActionUrl(string $action = null, bool $referer = false)
     {
-        $this->modx->log(xPDO::LOG_LEVEL_ERROR, '[authAzure] - getActionUrl: ' . print_r($_SERVER, true));
-        if ($_SERVER['HTTP_REFERER']) {
+        if ($_SERVER['HTTP_REFERER'] && $referer) {
             $request = strtok($_SERVER['HTTP_REFERER'], '?');
         } else {
             $request = preg_replace('#^' . $this->modx->getOption('base_url') . '#', '', strtok($_SERVER['REQUEST_URI'], '?'));

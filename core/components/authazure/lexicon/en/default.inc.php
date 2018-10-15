@@ -28,3 +28,6 @@ $_lang['setting_authazure.default_groups'] = 'Default MODX User Groups ';
 $_lang['setting_authazure.default_groups_desc'] = 'A comma separated list of user group names which authenticated users will be given membership to upon login. You can also include optional \'Role\' ID and \'Rank\' number for each group using the format - \'Group1Name:role:rank,Group2Name:role:rank\'';
 $_lang['setting_authazure.enable_group_sync'] = 'Enable Azure AD User Group Sync';
 $_lang['setting_authazure.enable_group_sync_desc'] = 'To enable auto synchronised Azure Active Directory user group memberships, select a parent group to contain the synced groups.';
+
+// Error lexicons
+$_lang['authazure.err.login'] = 'There has been a problem authenticating your account. Please try again or contact your Site Administrator.';

@@ -27,10 +27,32 @@
           ]
         }
       ],
+      "chunks": [
+        {
+          "name": "aazLoginTpl",
+          "file": "chunk.login.tpl"
+        },{
+          "name": "aazLogoutTpl",
+          "file": "chunk.logout.tpl"
+        }
+      ],
       "snippets": [
         {
           "name": "authAzureLogin",
-          "file": "snippet.authazure.login.php"
+          "file": "snippet.authazure.login.php",
+          "properties": [
+            {
+              "name": "loginTpl",
+              "description": "authazure.login.loginTpl_desc",
+              "type": "textfield",
+              "value": "aazLoginTpl"
+            },{
+              "name": "logoutTpl",
+              "description": "authazure.login.logoutTpl_desc",
+              "type": "textfield",
+              "value": "aazLogoutTpl"
+            }
+          ]
         }
       ]
     },
