@@ -43,6 +43,8 @@ class AuthAzure
      */
     public function Login()
     {
+        //TODO Refactor to handle user check | profile | login separately
+        //TODO ^include better handing of logged in mgr users
         try {
             $this->init();
             $provider = $this->loadProvider();
@@ -104,7 +106,7 @@ class AuthAzure
                         'fullname' => $ad_profile['givenName'] . ' ' . $ad_profile['surname'],
                         'email' => $ad_profile['mail'],
                         'defaultGroups' => $this->config['defaultGroups'],
-                        'active' => 1
+                        'active' => 1 //TODO fix active status
                     );
                     //sync active directory groups
                     if ($this->config['adGroupSync']) {
@@ -133,7 +135,7 @@ class AuthAzure
                         $msg = implode(', ', $response->getAllErrors());
                         throw new Exception('Update user profile failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
                     }
-                    if (!$user->isMember(explode(',',$this->config['protectedGroups']))) {
+                    if (!$user->isMember(explode(',', $this->config['protectedGroups']))) {
                         $login_data = [
                             'username' => $username,
                             'password' => md5(rand()),
@@ -351,6 +353,41 @@ class AuthAzure
     }
 
     /**
+     * Returns clean action url
+     *
+     * @param string $action - authAzure action
+     *
+     * @return string
+     */
+    public function getActionUrl(string $action = null)
+    {
+        $this->modx->log(xPDO::LOG_LEVEL_ERROR, '[authAzure] - getActionUrl: ' . print_r($_SERVER, true));
+        if ($_SERVER['HTTP_REFERER']) {
+            $request = strtok($_SERVER['HTTP_REFERER'], '?');
+        } else {
+            $request = preg_replace('#^' . $this->modx->getOption('base_url') . '#', '', strtok($_SERVER['REQUEST_URI'], '?'));
+            $request = $this->modx->getOption('site_url') . ltrim($request, '/');
+        }
+        $query_str = strtok(''); //gets the rest
+        if ($query_str !== false) {
+            parse_str(html_entity_decode($query_str), $query_arr);
+        } else {
+            $query_arr = array();
+        }
+        if ($action) {
+            $query_arr['authAzure_action'] = $action;
+        }
+        if (!empty($query_arr)) {
+            $url_params = '?' . http_build_query($query_arr, '', '&amp;');
+            $request .= $url_params;
+        }
+        $request = rawurldecode($request);
+        $url = preg_replace('#["\']#', '', strip_tags($request));
+
+        return $url;
+    }
+
+    /**
      * Custom exception handler
      *
      * @param Throwable $e
@@ -370,7 +407,7 @@ class AuthAzure
         $this->modx->log($level, '[authAzure] - ' . $e->getMessage() . ' on Line ' . $line, '', '', '', $line); //TODO $line ignored - log modx issue
         if ($fatal) {
             unset($_SESSION['authAzure']);
-            $_SESSION['authAzure']['error'] = true;
+            $_SESSION['authAzure']['error'] = true; //TODO fix unset in correct places
             if ($id = $this->config['loginResourceId']) {
                 $this->modx->sendRedirect($this->modx->makeUrl($id, '', '', 'full'));
             } else {
