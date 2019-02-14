@@ -18,7 +18,11 @@ Whilst in beta:
 - GitHub Repository: http://github.com/tasianmedia/authazure
 - Bugs & Feature Requests: http://github.com/tasianmedia/authazure/issues
 
-If you have a bug fix or improvement and would like to submit a Pull Request, please make sure you target the 'develop' branch.
+#### Branch labels follow semantic versioning:
+- X = Milestone Number
+- X.x = Version Number
+
+If you have a contribution and would like to submit a Pull Request, please be sure to target the correct branch.
 
 ### Details
 Author: David Pede (dev@tasian.media) (https://twitter.com/davepede)
