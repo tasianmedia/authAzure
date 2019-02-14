@@ -22,11 +22,9 @@ if ($object->xpdo) {
             $modx->addPackage('authazure', $modelPath, null);
 
 
-
             $manager = $modx->getManager();
 
             $manager->createObjectContainer('AazProfile');
-
 
             break;
     }

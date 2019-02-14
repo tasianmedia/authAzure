@@ -1,11 +1,11 @@
 --------------------
 Extra: authAzure
 --------------------
-Version: 1.1.1-beta
-Released: September 18, 2018
+Version: 1.0.0-beta1
+Released: February 14, 2019
 Since: August 22, 2018
 Author: David Pede  <dev@tasian.media> <https://twitter.com/davepede>
-Copyright: (C) 2018 David Pede. All rights reserved.
+Copyright: (C) 2019 David Pede. All rights reserved.
 
 An Azure Active Directory Extra for MODX Revolution.
 

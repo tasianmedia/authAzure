@@ -1,11 +1,12 @@
 Changelog for authAzure.
 
-authAzure 1.1.1-beta (September 18, 2018)
+authAzure 1.0.0-beta1 (February 14, 2019)
 ====================================
+- Fetch full ms account logout address
+- SSO improvements
+- Improve manual login/out support
+- Add getActionUrl()
 - Add login basic snippet
-
-authAzure 1.1.0-beta (September 13, 2018)
-====================================
 - Add sys setting lexicons
 - Add admin groups setting and checks
 - Fix missing profile issue for existing users
