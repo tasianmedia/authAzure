@@ -26,6 +26,14 @@ switch ($modx->event->name) {
                             case 'login':
                                 $authAzure->Login();
                                 break;
+                            default:
+                                if ($modx->getOption('authazure.enable_sso')) {
+                                    if ($id = $modx->getOption('authazure.login_resource_id')) {
+                                        $modx->sendForward($id);
+                                    } else {
+                                        $modx->log(xPDO::LOG_LEVEL_ERROR, '[authAzure] - ' . 'Login Resource ID not found, cannot enable Single Sign-on.');
+                                    }
+                                }
                         }
                     }
                 } else {

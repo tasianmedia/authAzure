@@ -106,6 +106,7 @@ class AuthAzure
                         'username' => $username,
                         'fullname' => $ad_profile['givenName'] . ' ' . $ad_profile['surname'],
                         'email' => $ad_profile['mail'],
+                        'photo' => $ad_profile['photoUrl'],
                         'defaultGroups' => $this->config['defaultGroups'],
                         'active' => 1 //TODO fix active status
                     );
@@ -177,6 +178,7 @@ class AuthAzure
                         'username' => $username,
                         'fullname' => $ad_profile['givenName'] . ' ' . $ad_profile['surname'],
                         'email' => $ad_profile['mail'],
+                        'photo' => $ad_profile['photoUrl'],
                         'defaultGroups' => $this->config['defaultGroups'],
                         'active' => 1,
                     );
@@ -359,13 +361,13 @@ class AuthAzure
      *
      * @return string
      */
-    public function getActionUrl(string $action = null, bool $referer = false)
+    public function getActionUrl(string $action = null, bool $referer = true)
     {
         if ($_SERVER['HTTP_REFERER'] && $referer) {
-            $request = strtok($_SERVER['HTTP_REFERER'], '?');
+            $request = preg_replace('#^' . $this->modx->getOption('base_url') . '#', '', strtok($_SERVER['HTTP_REFERER'], '?'));
         } else {
             $request = preg_replace('#^' . $this->modx->getOption('base_url') . '#', '', strtok($_SERVER['REQUEST_URI'], '?'));
-            $request = $this->modx->getOption('site_url') . ltrim($request, '/');
+            $request = $this->modx->getOption('site_url') . ltrim(rawurldecode($request), '/');
         }
         $query_str = strtok(''); //gets the rest
         if ($query_str !== false) {
@@ -377,13 +379,37 @@ class AuthAzure
             $query_arr['authAzure_action'] = $action;
         }
         if (!empty($query_arr)) {
-            $url_params = '?' . http_build_query($query_arr, '', '&amp;');
+            $url_params = '?' . http_build_query($query_arr, '', '&');
             $request .= $url_params;
         }
-        $request = rawurldecode($request);
         $url = preg_replace('#["\']#', '', strip_tags($request));
 
         return $url;
+    }
+
+    /**
+     * Returns azure account logout url
+     *
+     * @param string $return_url - The destination after the user is logged out from their account.
+     * @param object $provider - Object containing provider config
+     *
+     * @return string
+     * @throws exception
+     */
+    public function getLogoutUrl(string $return_url = null, object $provider = null)
+    {
+        try {
+            if (!$return_url) {
+                $return_url = $this->modx->getOption('site_url');
+            }
+            if (!$provider) {
+                $provider = $this->loadProvider();
+            }
+            $url = $provider->getLogoutUrl($return_url);
+            return $url;
+        } catch (Exception $e) {
+            throw $e;
+        }
     }
 
     /**
@@ -406,7 +432,7 @@ class AuthAzure
         $this->modx->log($level, '[authAzure] - ' . $e->getMessage() . ' on Line ' . $line, '', '', '', $line); //TODO $line ignored - log modx issue
         if ($fatal) {
             unset($_SESSION['authAzure']);
-            $_SESSION['authAzure']['error'] = true; //TODO fix unset in correct places
+            $_SESSION['authAzure']['error'] = true;
             if ($id = $this->config['loginResourceId']) {
                 $this->modx->sendRedirect($this->modx->makeUrl($id, '', '', 'full'));
             } else {
@@ -454,7 +480,7 @@ class AuthAzure
             $request = $provider->getAuthenticatedRequest('get', 'https://graph.microsoft.com/beta/me/photo/$value', $token);
             $response = $provider->getResponse($request);
             $body = $response->getBody();
-            $path = 'img/web/profile-photos/' . $filename . '.jpg';
+            $path = 'img/web/profile-photos/' . $filename . '.jpg'; //TODO fix so that filename is uid not custom
             $photo = fopen($path, "w");
             fwrite($photo, $body);
             fclose($photo);
@@ -479,5 +505,28 @@ class AuthAzure
                 'processors_path' => $this->config['processorsPath'],
             ]
         );
+    }
+
+    /**
+     * String sanitise
+     *
+     * @param string $string - The string to sanitize.
+     * @param bool $force_lowercase - Force the string to lowercase?
+     * @param bool $strict - If set to *true*, will remove all non-alphanumeric characters.
+     *
+     * @return string
+     */
+    function sanitize($string, $force_lowercase = false, $strict = true)
+    {
+        $strip = array("~", "`", "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "_", "=", "+", "[", "{", "]",
+            "}", "\\", "|", ";", ":", "\"", "'", "&#8216;", "&#8217;", "&#8220;", "&#8221;", "&#8211;", "&#8212;",
+            "â€”", "â€“", ",", "<", ".", ">", "/", "?");
+        $clean = trim(str_replace($strip, "", strip_tags($string)));
+        $clean = preg_replace('/[\s-]+/', "-", $clean);
+        $clean = ($strict) ? preg_replace("/[^a-zA-Z0-9-]/", "", $clean) : $clean;
+
+        $output = ($force_lowercase) ? (function_exists('mb_strtolower')) ? mb_strtolower($clean, 'UTF-8') : strtolower($clean) : $clean;
+
+        return $output;
     }
 }
