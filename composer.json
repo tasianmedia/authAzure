@@ -3,6 +3,6 @@
     "vendor-dir": "core/components/authazure/vendors"
   },
   "require": {
-    "davidpede/oauth2-azure": "v2-fixes.x-dev"
+    "thenetworg/oauth2-azure": "v2.0.0.x-dev"
   }
 }
