@@ -1,5 +1,8 @@
 <?php
 
+use TheNetworg\OAuth2\Client\Provider\Azure;
+use League\OAuth2\Client\Provider\Exception\IdentityProviderException;
+
 /**
  * The authAzure service class.
  *
@@ -9,6 +12,8 @@ class AuthAzure
 {
     public $modx;
     public $config = array();
+
+    private $accessToken = array();
 
     function __construct(modX &$modx, array $config = array())
     {
@@ -35,6 +40,7 @@ class AuthAzure
             'adGroupSync' => $this->modx->getOption('authazure.enable_group_sync'),
         ), $config);
         $this->modx->addPackage('authazure', $this->config['modelPath']);
+        require_once $this->config['vendorPath'] . 'autoload.php';
     }
 
     /**
@@ -49,7 +55,7 @@ class AuthAzure
         try {
             $this->init();
             $provider = $this->loadProvider();
-            $id_token = $this->userAuth($provider);
+            $id_token = $this->verifyUser($provider);
         } catch (Exception $e) {
             $this->exceptionHandler($e, __LINE__, true);
         }
@@ -57,52 +63,47 @@ class AuthAzure
         if (isset($id_token) && $id_token) {
             // Set critical
             $username = $id_token['email'];
+
+            try {
+                //Gain access tokens
+                //TODO make on_behalf_of grants customisable via settings/cmp
+                //get msgraph api access token - uses code grant
+                $this->accessToken['ms_graph'] = $provider->getAccessToken('authorization_code', [
+                    'code' => $id_token['code']
+                ]);
+            } catch (Exception $e) {
+                $this->exceptionHandler($e, __LINE__, true);
+            }
+            
             // Check if new or existing user
             /** @var modUser $user */
             if ($user = $this->modx->getObject('modUser', array('username' => $id_token['email']))) {
                 try {
+                    //user id
+                    $uid = $user->get('id');
+
+                    //save id_token to profile
+                    //TODO do we need to save id_token to profile...?
                     /** @var AazProfile $aaz_profile */
-                    if ($aaz_profile = $this->modx->getObject('AazProfile', array('user_id' => $user->get('id')))) {
-                        $token = unserialize($aaz_profile->get('token'));
-                        if ($token->hasExpired()) {
-                            $exp_token = $token;
-                            $token = '';
-                            if ($exp_token->getRefreshToken()) {
-                                try {
-                                    $token = $provider->getAccessToken('refresh_token', [
-                                        'refresh_token' => $exp_token->getRefreshToken() //TODO document - app must request and be granted the offline_access scope https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-id-and-access-tokens
-                                    ]);
-                                } catch (Exception $e) {
-                                    $this->exceptionHandler($e, __LINE__);
-                                }
-                            }
-                            if (!$token) {
-                                $token = $provider->getAccessToken('authorization_code', [
-                                    'code' => $_REQUEST['code']
-                                ]);
-                            }
-                            $aaz_profile->set('token', serialize($token));
-                            $aaz_profile->save();
-                        }
+                    if ($aaz_profile = $this->modx->getObject('AazProfile', array('user_id' => $uid))) {
+                        $aaz_profile->set('token', serialize($id_token));
                     } else {
-                        $token = $provider->getAccessToken('authorization_code', [
-                            'code' => $_REQUEST['code']
-                        ]);
                         $aaz_profile = $this->modx->newObject('AazProfile', array(
-                            'user_id' => $user->get('id'),
-                            'token' => serialize($token)
+                            'user_id' => $uid,
+                            'token' => serialize($id_token)
                         ));
-                        $aaz_profile->save();
                     }
-                    //get active directory profile
-                    $ad_profile = $this->getApi('https://graph.microsoft.com/beta/me', $token, $provider);
+                    $aaz_profile->save();
+
+                    //get msgraph profile
+                    $ad_profile = $this->getApi('https://graph.microsoft.com/beta/me', $this->accessToken['ms_graph'], $provider);
                     try {
-                        $ad_profile['photoUrl'] = $this->getProfilePhoto($ad_profile['mailNickname'], $token, $provider);
+                        $ad_profile['photoUrl'] = $this->getProfilePhoto($ad_profile['mailNickname'], $this->accessToken['ms_graph'], $provider);
                     } catch (Exception $e) {
                         $this->exceptionHandler($e, __LINE__);
                     }
                     $user_data = array(
-                        'id' => $user->get('id'),
+                        'id' => $uid,
                         'username' => $username,
                         'fullname' => $ad_profile['givenName'] . ' ' . $ad_profile['surname'],
                         'email' => $ad_profile['mail'],
@@ -113,7 +114,7 @@ class AuthAzure
                     //sync active directory groups
                     if ($this->config['adGroupSync']) {
                         try {
-                            $group_arr = $this->getApi('https://graph.microsoft.com/v1.0/me/memberOf?$select=displayName', $token, $provider);
+                            $group_arr = $this->getApi('https://graph.microsoft.com/v1.0/me/memberOf?$select=displayName', $this->accessToken['ms_graph'], $provider);
                             $user_data['adGroupsParent'] = $this->config['adGroupSync'];
                             $user_data['adGroups'] = implode(',', array_column($group_arr['value'], 'displayName'));
                         } catch (Exception $e) {
@@ -137,6 +138,12 @@ class AuthAzure
                         $msg = implode(', ', $response->getAllErrors());
                         throw new Exception('Update user profile failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
                     }
+                    //update access tokens
+                    foreach ($this->accessToken as $k => $v) {
+                        //save to cache
+                        $this->modx->cacheManager->set($uid . $k, $v, 0, array(xPDO::OPT_CACHE_KEY => 'aaz'));
+                    }
+
                     if (!$user->isMember(explode(',', $this->config['protectedGroups']))) {
                         $login_data = [
                             'username' => $username,
@@ -164,13 +171,10 @@ class AuthAzure
                 }
             } else {
                 try {
-                    $token = $provider->getAccessToken('authorization_code', [
-                        'code' => $_REQUEST['code']
-                    ]);
                     //get active directory profile
-                    $ad_profile = $this->getApi('https://graph.microsoft.com/beta/me', $token, $provider);
+                    $ad_profile = $this->getApi('https://graph.microsoft.com/beta/me', $this->accessToken['ms_graph'], $provider);
                     try {
-                        $ad_profile['photoUrl'] = $this->getProfilePhoto($ad_profile['mailNickname'], $token, $provider);
+                        $ad_profile['photoUrl'] = $this->getProfilePhoto($ad_profile['mailNickname'], $this->accessToken['ms_graph'], $provider);
                     } catch (Exception $e) {
                         $this->exceptionHandler($e, __LINE__);
                     }
@@ -185,7 +189,7 @@ class AuthAzure
                     //sync active directory groups
                     if ($this->config['adGroupSync']) {
                         try {
-                            $group_arr = $this->getApi('https://graph.microsoft.com/v1.0/me/memberOf?$select=displayName', $token, $provider);
+                            $group_arr = $this->getApi('https://graph.microsoft.com/v1.0/me/memberOf?$select=displayName', $this->accessToken['ms_graph'], $provider);
                             $user_data['adGroupsParent'] = $this->config['adGroupSync'];
                             $user_data['adGroups'] = implode(',', array_column($group_arr['value'], 'displayName'));
                         } catch (Exception $e) {
@@ -199,18 +203,25 @@ class AuthAzure
                         $msg = implode(', ', $response->getAllErrors());
                         throw new Exception('Create new user failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
                     }
+                    //user id
                     $uid = $response->response['object']['id'];
                     //create profile
                     /** @var modProcessorResponse $response */
                     $response = $this->runProcessor('web/profile/create', array(
                         'user_id' => $uid,
                         'data' => serialize($ad_profile),
-                        'token' => serialize($token)
+                        'token' => serialize($id_token)
                     ));
                     if ($response->isError()) {
                         $msg = implode(', ', $response->getAllErrors());
                         throw new Exception('Create new user profile failed: ' . print_r($user_data, true) . '. Message: ' . $msg);
                     }
+                    //update access tokens
+                    foreach ($this->accessToken as $k => $v) {
+                        //save to cache
+                        $this->modx->cacheManager->set($uid . $k, $v, 0, array(xPDO::OPT_CACHE_KEY => 'aaz'));
+                    }
+
                     $login_data = [
                         'username' => $username,
                         'password' => md5(rand()),
@@ -259,12 +270,11 @@ class AuthAzure
     /**
      * Instantiates the provider
      *
-     * @return object
+     * @return Azure $provider - Provider Object
      * @throws exception
      */
     public function loadProvider()
     {
-        require_once $this->config['vendorPath'] . 'autoload.php';
         $providerConfig = [
             'clientId' => $this->modx->getOption('authazure.client_id'),
             'clientSecret' => $this->modx->getOption('authazure.client_secret'),
@@ -284,32 +294,29 @@ class AuthAzure
     /**
      * Authenticates the user against provider and returns verified id_token
      *
-     * @param object $provider - Object containing provider config
+     * @param Azure $provider - Provider Object
      *
      * @return array
      * @throws exception
      */
-    public function userAuth($provider)
+    public function verifyUser(Azure $provider)
     {
         if (!isset($_REQUEST['code'])) {
-            try {
-                $nonce = md5(rand());
-                $authorizationUrl = $provider->getAuthorizationUrl([
-                    'scope' => [ //TODO move to sys setting
-                        'openid', 'email', 'profile', 'offline_access',
-                        'https://graph.microsoft.com/User.Read',
-                        'https://graph.microsoft.com/Directory.Read.All'
-                    ],
-                    'nonce' => $nonce
-                ]);
-                // Get the state generated for you and store it to the session.
-                $_SESSION['authAzure']['oauth2state'] = $provider->getState();
-                $_SESSION['authAzure']['oauth2nonce'] = $nonce;
-                $_SESSION['authAzure']['redirectUrl'] = $this->getRedirectUrl();
-                $_SESSION['authAzure']['active'] = true;
-            } catch (Exception $e) {
-                throw $e;
-            }
+            $nonce = md5(rand());
+            $authorizationUrl = $provider->getAuthorizationUrl([
+                //scope here sets what available in code used to gain access token
+                'scope' => [ //TODO move to sys setting
+                    'openid', 'email', 'profile', 'offline_access',
+                    'https://graph.microsoft.com/User.Read',
+                    'https://graph.microsoft.com/Directory.Read.All'
+                ],
+                'nonce' => $nonce
+            ]);
+            // Get the state generated for you and store it to the session.
+            $_SESSION['authAzure']['oauth2state'] = $provider->getState();
+            $_SESSION['authAzure']['oauth2nonce'] = $nonce;
+            $_SESSION['authAzure']['redirectUrl'] = $this->getRedirectUrl();
+            $_SESSION['authAzure']['active'] = true;
             // Redirect the user to the authorization URL.
             $this->modx->sendRedirect($authorizationUrl);
             exit;
@@ -318,11 +325,18 @@ class AuthAzure
             unset($_SESSION['authAzure']['oauth2state']);
             unset($_SESSION['authAzure']['active']);
             if (isset($_REQUEST['id_token'])) {
-                //TODO add nonce check
-                $id_array = explode('.', $_REQUEST['id_token']);
-                $id_array[1] = base64_decode($id_array[1]);
-                $id_token = json_decode($id_array[1], true);
-                return $id_token;
+                //decode and validate id_token received
+                $id_token = $provider->validateToken($_REQUEST['id_token']);
+                //compare nonce
+                if (isset($_SESSION['authAzure']['oauth2nonce']) && $id_token['nonce'] == $_SESSION['authAzure']['oauth2nonce']) {
+                    unset($_SESSION['authAzure']['oauth2nonce']);
+                    //add in encoded id_token
+                    $id_token['encoded'] = $_REQUEST['id_token'];
+                    $id_token['code'] = $_REQUEST['code'];
+                    //output
+                    return $id_token;
+                }
+                throw new Exception('OAuth2 stored nonce mismatch. User authentication failed and login aborted.');
             }
             throw new Exception('ID Token not received. User authentication failed and login aborted.');
         }
@@ -391,12 +405,12 @@ class AuthAzure
      * Returns azure account logout url
      *
      * @param string $return_url - The destination after the user is logged out from their account.
-     * @param object $provider - Object containing provider config
+     * @param Azure $provider - Provider Object
      *
      * @return string
-     * @throws exception
+     * @throws Exception
      */
-    public function getLogoutUrl(string $return_url = null, object $provider = null)
+    public function getLogoutUrl(string $return_url = null, Azure $provider = null)
     {
         try {
             if (!$return_url) {
@@ -427,9 +441,19 @@ class AuthAzure
         if ($code <= 6 || $fatal) {
             $level = modX::LOG_LEVEL_ERROR;
         } else {
-            $level = modX::LOG_LEVEL_INFO;
+            $level = modX::LOG_LEVEL_WARN;
         }
-        $this->modx->log($level, '[authAzure] - ' . $e->getMessage() . ' on Line ' . $line, '', '', '', $line); //TODO $line ignored - log modx issue
+        //error
+        $message = $e->getMessage();
+        //azure ad error
+        if ($e instanceof IdentityProviderException) {
+            $trace = $e->getTrace();
+            if ($azure_error = $trace[0]['args'][1]['error_description']) {
+                $message .= ' - ' . $azure_error;
+            };
+        }
+        //log error
+        $this->modx->log($level, '[authAzure] ' . $message . ' on Line ' . $line, '', '', '', $line); //TODO $line ignored - log modx issue
         if ($fatal) {
             unset($_SESSION['authAzure']);
             $_SESSION['authAzure']['error'] = true;
@@ -447,12 +471,12 @@ class AuthAzure
      *
      * @param string $url - API Endpoint URL
      * @param string $token - Access Token
-     * @param object $provider - Object containing provider config
+     * @param Azure $provider - Provider Object
      *
      * @return array
      * @throws exception
      */
-    public function getApi($url, $token, $provider)
+    public function getApi(string $url, string $token, Azure $provider)
     {
         try {
             $request = $provider->getAuthenticatedRequest('get', $url, $token);
@@ -469,12 +493,12 @@ class AuthAzure
      *
      * @param string $filename - Filename to use for saved image
      * @param string $token - Access Token
-     * @param object $provider - Object containing provider config
+     * @param Azure $provider - Provider Object
      *
      * @return string
      * @throws exception
      */
-    public function getProfilePhoto($filename, $token, $provider)
+    public function getProfilePhoto(string $filename, string $token, Azure $provider)
     {
         try {
             $request = $provider->getAuthenticatedRequest('get', 'https://graph.microsoft.com/beta/me/photo/$value', $token);
