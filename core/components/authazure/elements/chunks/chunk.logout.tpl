@@ -9,7 +9,7 @@
                 </div>
                 `]]
                 <div class="border-bottom w-100 d-block text-center pb-2">
-                    <h5>Are you sure you want to logout from [[++site_name]]?</h5>
+                    <h5>Logout from [[++site_name]] or <a href="[[++site_url]]">Return to Site</a>?</h5>
                 </div>
                 <div class="mt-4">
                     <a href="[[+aaz.logout_url]]">

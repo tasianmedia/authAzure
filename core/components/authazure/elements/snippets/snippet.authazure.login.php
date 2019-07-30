@@ -34,7 +34,7 @@ if (!isset($_SESSION['authAzure']['error'])) {
 if (!$modx->user->isAuthenticated($modx->context->key)) {
     $output = $modx->getChunk($loginTpl, $phs);
 } else {
-    $phs['aaz']['logout_url'] = $authazure->getActionUrl('logout');
+    $phs['aaz']['logout_url'] = $authazure->getActionUrl('logout', false);
     $phs['aaz']['logout_azure_url'] = $authazure->getLogoutUrl();
     $output = $modx->getChunk($logoutTpl, $phs);
 }
