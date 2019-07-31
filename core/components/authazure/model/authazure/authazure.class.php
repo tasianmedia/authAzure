@@ -1,6 +1,7 @@
 <?php
 
 use TheNetworg\OAuth2\Client\Provider\Azure;
+use TheNetworg\OAuth2\Client\Token\AccessToken;
 use League\OAuth2\Client\Provider\Exception\IdentityProviderException;
 
 /**
@@ -142,7 +143,8 @@ class AuthAzure
                     //update access tokens
                     foreach ($this->accessToken as $k => $v) {
                         //save to cache
-                        $this->modx->cacheManager->set($uid . $k, $v, 0, array(xPDO::OPT_CACHE_KEY => 'aaz'));
+                        $token = serialize($v);
+                        $this->modx->cacheManager->set($uid . $k, $token, 0, array(xPDO::OPT_CACHE_KEY => 'aaz'));
                     }
 
                     if (!$user->isMember(explode(',', $this->config['protectedGroups']))) {
@@ -220,7 +222,8 @@ class AuthAzure
                     //update access tokens
                     foreach ($this->accessToken as $k => $v) {
                         //save to cache
-                        $this->modx->cacheManager->set($uid . $k, $v, 0, array(xPDO::OPT_CACHE_KEY => 'aaz'));
+                        $token = serialize($v);
+                        $this->modx->cacheManager->set($uid . $k, $token, 0, array(xPDO::OPT_CACHE_KEY => 'aaz'));
                     }
 
                     $login_data = [
@@ -464,6 +467,53 @@ class AuthAzure
                 $this->modx->sendRedirect($this->modx->makeUrl($this->modx->getOption('site_start'), '', '', 'full'));
             }
             exit;
+        }
+    }
+
+    /**
+     * Returns access token
+     *
+     * @param string $name - token name
+     *
+     * @return string
+     * @throws exception
+     */
+    public function fetchToken(string $name)
+    {
+        try {
+            /** @var modUser $user */
+            if (!$user = $this->modx->getAuthenticatedUser($this->config['ctx'])) {
+                throw new Exception("Cannot fetch '{$name}' access token. User is not authenticated.");
+            }
+            $uid = $user->get('id');
+            /** @var AccessToken $token */
+            if ($token = unserialize($this->modx->cacheManager->get($uid . $name, array(xPDO::OPT_CACHE_KEY => 'aaz')))) {
+                if ($token->hasExpired()) {
+                    if ($refresh_token = $token->getRefreshToken()) {
+                        try {
+                            //refresh
+                            $token = $this->loadProvider()->getAccessToken('refresh_token', [
+                                'refresh_token' => $refresh_token
+                            ]);
+                            //save
+                            $refreshed_token = serialize($token);
+                            $this->modx->cacheManager->set($uid . $name, $refreshed_token, 0, array(xPDO::OPT_CACHE_KEY => 'aaz'));
+                        } catch (Exception $e) {
+                            $this->exceptionHandler($e, __LINE__);
+                            throw new Exception("Cannot refresh '{$name}' access token. Please check error log for more details.");
+                        }
+                    } else {
+                        throw new Exception("Cannot fetch '{$name}' access token. Token is expired and no refresh token found.");
+                    }
+                }
+
+                return $token->getToken();
+
+            } else {
+                throw new Exception("Cannot fetch '{$name}' access token. Token not found.");
+            }
+        } catch (Exception $e) {
+            throw $e;
         }
     }
 
