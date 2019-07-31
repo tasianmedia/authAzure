@@ -33,6 +33,7 @@ class AuthAzure
             'cssUrl' => $assetsUrl . 'mgr/css/',
             'assetsUrl' => $assetsUrl,
             'connectorUrl' => $assetsUrl . 'connector.php',
+            'ctx' => $this->modx->context->key,
 
             'loginResourceId' => $this->modx->getOption('authazure.login_resource_id'),
             'defaultGroups' => $this->modx->getOption('authazure.default_groups'),
