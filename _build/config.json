@@ -78,6 +78,11 @@
         "area": "Azure Configuration",
         "value": ""
       },{
+        "key": "s2s_configs",
+        "type": "textfield",
+        "area": "Azure Configuration",
+        "value": ""
+      },{
         "key": "enable_sso",
         "type": "combo-boolean",
         "area": "Single Sign On",

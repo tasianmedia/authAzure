@@ -15,6 +15,8 @@ $_lang['setting_authazure.redirect_url'] = 'Redirect URL';
 $_lang['setting_authazure.redirect_url_desc'] = 'Default URL to which Azure AD will redirect the user after obtaining authorization';
 $_lang['setting_authazure.openid_config_url'] = 'OpenID Connect Metadata';
 $_lang['setting_authazure.openid_config_url_desc'] = 'URL for your OpenID Connect metadata document';
+$_lang['setting_authazure.s2s_configs'] = 'Service-to-service Token Configurations';
+$_lang['setting_authazure.s2s_configs_desc'] = 'Service-to-service access token request parameters in JSON format - {"service1_name": ["scope1","scope2","scope3"],"service2_name": ["scope1","scope2","scope3"]}. Tokens generated here can be access using \'fetchToken()\' method.';
 
 $_lang['setting_authazure.login_resource_id'] = 'Login Resource ID [REQUIRED]';
 $_lang['setting_authazure.login_resource_id_desc'] = 'The ID number of your login resource.';

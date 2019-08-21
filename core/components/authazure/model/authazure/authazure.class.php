@@ -76,7 +76,22 @@ class AuthAzure
             } catch (Exception $e) {
                 $this->exceptionHandler($e, __LINE__, true);
             }
-            
+            try {
+                //get api access token - on_behalf_of grant
+                if ($s2s = $this->modx->getOption('authazure.s2s_configs')) {
+                    $s2s = json_decode($s2s);
+                    foreach ($s2s as $name => $scopes) {
+                        $this->accessToken[$name] = $provider->getAccessToken('jwt_bearer', [
+                            'assertion' => $id_token['encoded'], //must be encoded id_token
+                            'requested_token_use' => 'on_behalf_of',
+                            'scope' => implode(' ',$scopes)
+                        ]);
+                    }
+                }
+            } catch (Exception $e) {
+                $this->exceptionHandler($e, __LINE__);
+            }
+
             // Check if new or existing user
             /** @var modUser $user */
             if ($user = $this->modx->getObject('modUser', array('username' => $id_token['email']))) {
@@ -473,7 +488,7 @@ class AuthAzure
     /**
      * Returns access token
      *
-     * @param string $name - token name
+     * @param string $name - Service name specified in [[++authazure.s2s_configs]] system setting
      *
      * @return string
      * @throws exception
