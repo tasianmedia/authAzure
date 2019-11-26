@@ -5,7 +5,10 @@
                 [[+aaz.error:notempty=`
                 <div class="alert alert-danger mb-5 d-flex align-items-center text-left" role="alert">
                     <i class="fas fa-exclamation-triangle fa-2x"></i>
-                    <span class="ml-3">[[+aaz.error]]</span>
+                    <div class="ml-3">
+                        <p>[[+aaz.error]]</p>
+                        <span>Error ID: [[+aaz.error_id]]</span>
+                    </div>
                 </div>
                 `]]
                 <div class="border-bottom w-100 d-block text-center pb-2">

@@ -59,7 +59,7 @@ class AuthAzure
             $provider = $this->loadProvider();
             $id_token = $this->verifyUser($provider);
         } catch (Exception $e) {
-            $this->exceptionHandler($e, __LINE__, true);
+            $this->exceptionHandler($e,true);
         }
 
         if (isset($id_token) && $id_token) {
@@ -74,7 +74,7 @@ class AuthAzure
                     'code' => $id_token['code']
                 ]);
             } catch (Exception $e) {
-                $this->exceptionHandler($e, __LINE__, true);
+                $this->exceptionHandler($e,true);
             }
             try {
                 //get api access token - on_behalf_of grant
@@ -89,7 +89,7 @@ class AuthAzure
                     }
                 }
             } catch (Exception $e) {
-                $this->exceptionHandler($e, __LINE__);
+                $this->exceptionHandler($e);
             }
 
             // Check if new or existing user
@@ -117,7 +117,7 @@ class AuthAzure
                     try {
                         $ad_profile['photoUrl'] = $this->getProfilePhoto($ad_profile['mailNickname'], $this->accessToken['ms_graph'], $provider);
                     } catch (Exception $e) {
-                        $this->exceptionHandler($e, __LINE__);
+                        $this->exceptionHandler($e);
                     }
                     $user_data = array(
                         'id' => $uid,
@@ -135,7 +135,7 @@ class AuthAzure
                             $user_data['adGroupsParent'] = $this->config['adGroupSync'];
                             $user_data['adGroups'] = implode(',', array_column($group_arr['value'], 'displayName'));
                         } catch (Exception $e) {
-                            $this->exceptionHandler($e, __LINE__);
+                            $this->exceptionHandler($e);
                         }
                     }
                     //update user
@@ -185,7 +185,7 @@ class AuthAzure
                         unset($_SESSION['authAzure']['redirectUrl']);
                     }
                 } catch (Exception $e) {
-                    $this->exceptionHandler($e, __LINE__, true);
+                    $this->exceptionHandler($e, true);
                 }
             } else {
                 try {
@@ -194,7 +194,7 @@ class AuthAzure
                     try {
                         $ad_profile['photoUrl'] = $this->getProfilePhoto($ad_profile['mailNickname'], $this->accessToken['ms_graph'], $provider);
                     } catch (Exception $e) {
-                        $this->exceptionHandler($e, __LINE__);
+                        $this->exceptionHandler($e);
                     }
                     $user_data = array(
                         'username' => $username,
@@ -211,7 +211,7 @@ class AuthAzure
                             $user_data['adGroupsParent'] = $this->config['adGroupSync'];
                             $user_data['adGroups'] = implode(',', array_column($group_arr['value'], 'displayName'));
                         } catch (Exception $e) {
-                            $this->exceptionHandler($e, __LINE__);
+                            $this->exceptionHandler($e);
                         }
                     }
                     //create user
@@ -260,7 +260,7 @@ class AuthAzure
                         unset($_SESSION['authAzure']['redirectUrl']);
                     }
                 } catch (Exception $e) {
-                    $this->exceptionHandler($e, __LINE__, true);
+                    $this->exceptionHandler($e, true);
                 }
             }
         }
@@ -320,6 +320,10 @@ class AuthAzure
      */
     public function verifyUser(Azure $provider)
     {
+        //azure ad error check
+        if (isset($_REQUEST['error']) && isset($_REQUEST['error_description'])) {
+            throw new Exception($_REQUEST['error_description']);
+        }
         if (!isset($_REQUEST['code'])) {
             $nonce = md5(rand());
             $authorizationUrl = $provider->getAuthorizationUrl([
@@ -399,8 +403,7 @@ class AuthAzure
         if ($_SERVER['HTTP_REFERER'] && $referer) {
             $request = preg_replace('#^' . $this->modx->getOption('base_url') . '#', '', strtok($_SERVER['HTTP_REFERER'], '?'));
         } else {
-            $request = preg_replace('#^' . $this->modx->getOption('base_url') . '#', '', strtok($_SERVER['REQUEST_URI'], '?'));
-            $request = $this->modx->getOption('site_url') . ltrim(rawurldecode($request), '/');
+            $request = $this->modx->getOption('site_url');
         }
         $query_str = strtok(''); //gets the rest
         if ($query_str !== false) {
@@ -449,12 +452,11 @@ class AuthAzure
      * Custom exception handler
      *
      * @param Throwable $e
-     * @param string $line
-     * @param bool $fatal (optional)
+     * @param bool|false $fatal
      *
      * @return void;
      */
-    public function exceptionHandler(Throwable $e, string $line, bool $fatal = false)
+    public function exceptionHandler(Throwable $e, bool $fatal = false)
     {
         $code = $e->getCode();
         if ($code <= 6 || $fatal) {
@@ -464,6 +466,7 @@ class AuthAzure
         }
         //error
         $message = $e->getMessage();
+        $error_id = 'AAZ' . uniqid();
         //azure ad error
         if ($e instanceof IdentityProviderException) {
             $trace = $e->getTrace();
@@ -471,15 +474,16 @@ class AuthAzure
                 $message .= ' - ' . $azure_error;
             };
         }
+        $message .= PHP_EOL . 'Error ID: ' . $error_id;
         //log error
-        $this->modx->log($level, '[authAzure] ' . $message . ' on Line ' . $line, '', '', '', $line); //TODO $line ignored - log modx issue
+        $this->modx->log($level, '[authAzure] ' . $message, '', '', $e->getFile(),$e->getLine());
         if ($fatal) {
             unset($_SESSION['authAzure']);
-            $_SESSION['authAzure']['error'] = true;
+            $_SESSION['authAzure']['error'] = $error_id;
             if ($id = $this->config['loginResourceId']) {
                 $this->modx->sendRedirect($this->modx->makeUrl($id, '', '', 'full'));
             } else {
-                $this->modx->sendRedirect($this->modx->makeUrl($this->modx->getOption('site_start'), '', '', 'full'));
+                $this->modx->sendUnauthorizedPage();
             }
             exit;
         }
@@ -514,7 +518,7 @@ class AuthAzure
                             $refreshed_token = serialize($token);
                             $this->modx->cacheManager->set($uid . $name, $refreshed_token, 0, array(xPDO::OPT_CACHE_KEY => 'aaz'));
                         } catch (Exception $e) {
-                            $this->exceptionHandler($e, __LINE__);
+                            $this->exceptionHandler($e);
                             throw new Exception("Cannot refresh '{$name}' access token. Please check error log for more details.");
                         }
                     } else {

@@ -7,12 +7,16 @@
  *
  * @var modX $modx
  * @var array $scriptProperties
- * @var AuthAzure $authazure
+ * @var AuthAzure $authAzure
  *
  */
 
-$authazure = $modx->getService('authazure', 'AuthAzure', $modx->getOption('authazure.core_path', null, $modx->getOption('core_path') . 'components/authazure/') . 'model/authazure/');
-if (!($authazure instanceof AuthAzure)) return $modx->log(MODX::LOG_LEVEL_ERROR, 'Service Class not loaded');
+// Instantiate service class
+$authAzure = $modx->getService('authazure', 'AuthAzure', $modx->getOption('authazure.core_path', null, $modx->getOption('core_path') . 'components/authazure/') . 'model/authazure/', array('ctx' => $modx->context->key));
+if (!($authAzure instanceof AuthAzure)) {
+    $modx->log(MODX::LOG_LEVEL_ERROR, '[authAzure] - ' . 'Service class not loaded');
+    return;
+};
 
 /* set default properties */
 $loginTpl = !empty($loginTpl) ? $loginTpl : '';
@@ -25,17 +29,18 @@ $modx->regClientStartupHTMLBlock('<link rel="stylesheet" href="https://stackpath
 $modx->regClientHTMLBlock('<script defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js" integrity="sha384-kW+oWsYx3YpxvjtZjFXqazFpA7UP/MbiY4jvs+RWZo2+N94PFZ36T6TFkc9O3qoB" crossorigin="anonymous"></script>');
 
 if (!isset($_SESSION['authAzure']['error'])) {
-    $phs['aaz']['login_url'] = $authazure->getActionUrl('login',true);
+    $phs['aaz']['login_url'] = $authAzure->getActionUrl('login',true);
 } else {
-    $phs['aaz']['login_url'] = $authazure->getActionUrl('login');
+    $phs['aaz']['login_url'] = $authAzure->getActionUrl('login',false);
     $phs['aaz']['error'] = $modx->lexicon('authazure.err.login');
+    $phs['aaz']['error_id'] = $_SESSION['authAzure']['error'];
     unset($_SESSION['authAzure']['error']);
 }
 if (!$modx->user->isAuthenticated($modx->context->key)) {
     $output = $modx->getChunk($loginTpl, $phs);
 } else {
-    $phs['aaz']['logout_url'] = $authazure->getActionUrl('logout', false);
-    $phs['aaz']['logout_azure_url'] = $authazure->getLogoutUrl();
+    $phs['aaz']['logout_url'] = $authAzure->getActionUrl('logout', false);
+    $phs['aaz']['logout_azure_url'] = $authAzure->getLogoutUrl();
     $output = $modx->getChunk($logoutTpl, $phs);
 }
 
