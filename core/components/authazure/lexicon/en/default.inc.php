@@ -23,6 +23,8 @@ $_lang['setting_authazure.login_resource_id_desc'] = 'The ID number of your logi
 
 $_lang['setting_authazure.enable_sso'] = 'Enable Single Sign-on';
 $_lang['setting_authazure.enable_sso_desc'] = 'If enabled all non mgr contexts will require user authentication unless overridden via context settings.';
+$_lang['setting_authazure.enable_seamless'] = 'Enable Seamless Sign-on';
+$_lang['setting_authazure.enable_seamless_desc'] = 'If enabled all non mgr contexts will automatically attempt user authentication bypassing the login page.';
 
 $_lang['setting_authazure.protected_groups'] = 'Protected MODX User Groups [REQUIRED]';
 $_lang['setting_authazure.protected_groups_desc'] = 'A comma separated list of user group names which contain users that require access to the MODX Manager (mgr). Members of these groups will be protected from automatic password resets which would otherwise lock them out of the MODX Manager and their accounts.';

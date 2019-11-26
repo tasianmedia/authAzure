@@ -88,6 +88,11 @@
         "area": "Single Sign On",
         "value": "0"
       },{
+        "key": "enable_seamless",
+        "type": "combo-boolean",
+        "area": "Single Sign On",
+        "value": "0"
+      },{
         "key": "enable_group_sync",
         "type": "modx-combo-usergroup",
         "area": "User Groups",

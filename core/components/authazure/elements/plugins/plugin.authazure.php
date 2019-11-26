@@ -1,4 +1,13 @@
 <?php
+/**
+ * Plugin to handle login / logout flow
+ *
+ * @package authAzure
+ * @subpackage plugins
+ *
+ * @var modX $modx
+ * @var AuthAzure $authAzure
+ */
 switch ($modx->event->name) {
     case 'OnHandleRequest':
         if ($modx->context->key !== 'mgr') {
@@ -16,9 +25,26 @@ switch ($modx->event->name) {
                             break;
                     }
                 }
-            } elseif (isset($_REQUEST['authAzure_action']) || isset($_SESSION['authAzure']['active'])) {
-                $path = $modx->getOption('authazure.core_path', null, $modx->getOption('core_path') . 'components/authazure/') . 'model/authazure/';
-                if ($authAzure = $modx->getService('authazure', 'AuthAzure', $path, array('ctx' => $modx->context->key))) {
+                return;
+            }
+            // Instantiate service class
+            $authAzure = $modx->getService('authazure', 'AuthAzure', $modx->getOption('authazure.core_path', null, $modx->getOption('core_path') . 'components/authazure/') . 'model/authazure/', array('ctx' => $modx->context->key));
+            if (!($authAzure instanceof AuthAzure)) {
+                $modx->log(MODX::LOG_LEVEL_ERROR, '[authAzure] - ' . 'Service class not loaded');
+                return;
+            };
+            try {
+                //required
+                if ($modx->getOption('authazure.login_resource_id')) {
+                    $aaz_login_id = $modx->getOption('authazure.login_resource_id');
+                } else {
+                    throw new Exception("Login Resource ID is required.");
+                }
+                //handle errors
+                if (isset($_SESSION['authAzure']['error'])) {
+                    $modx->sendForward($aaz_login_id);
+                } //handle flow
+                elseif (isset($_REQUEST['authAzure_action']) || isset($_SESSION['authAzure']['active'])) {
                     if (isset($_SESSION['authAzure']['active']) && $_SESSION['authAzure']['active'] === true) {
                         $authAzure->Login();
                     } else {
@@ -26,25 +52,15 @@ switch ($modx->event->name) {
                             case 'login':
                                 $authAzure->Login();
                                 break;
-                            default:
-                                if ($modx->getOption('authazure.enable_sso')) {
-                                    if ($id = $modx->getOption('authazure.login_resource_id')) {
-                                        $modx->sendForward($id);
-                                    } else {
-                                        $modx->log(xPDO::LOG_LEVEL_ERROR, '[authAzure] - ' . 'Login Resource ID not found, cannot enable Single Sign-on.');
-                                    }
-                                }
                         }
                     }
-                } else {
-                    $modx->log(xPDO::LOG_LEVEL_ERROR, '[authAzure] - ' . 'Service class cannot be loaded');
+                } elseif ($modx->getOption('authazure.enable_seamless')) {
+                    $authAzure->Login();
+                } elseif ($modx->getOption('authazure.enable_sso')) {
+                    $modx->sendForward($aaz_login_id);
                 }
-            } elseif ($modx->getOption('authazure.enable_sso')) {
-                if ($id = $modx->getOption('authazure.login_resource_id')) {
-                    $modx->sendForward($id);
-                } else {
-                    $modx->log(xPDO::LOG_LEVEL_ERROR, '[authAzure] - ' . 'Login Resource ID not found, cannot enable Single Sign-on.');
-                }
+            } catch (Exception $e) {
+                $authAzure->exceptionHandler($e,true);
             }
         }
         break;
@@ -53,3 +69,4 @@ switch ($modx->event->name) {
         unset($_SESSION['authAzure']['verified']);
         break;
 }
+
