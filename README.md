@@ -1,7 +1,7 @@
-# authAzure 1.0.0-beta2
+# authAzure 1.0.0-beta3
 ### An Azure Active Directory Extra for MODX Revolution.
 
-[![Version](https://img.shields.io/badge/Release-v1.0.0_beta2-F78F20.svg)](https://github.com/prpgraphics/knetTheme/releases)
+[![Version](https://img.shields.io/badge/Release-v1.0.0_beta3-F78F20.svg)](https://github.com/prpgraphics/knetTheme/releases)
 [![MODX Version](https://img.shields.io/badge/MODX-v2.6.x-F78F20.svg)](https://modx.com/download)
 ![PHP](https://img.shields.io/badge/PHP-v7.x-F78F20.svg)
 [![MODX Extra by Tasian Media](https://img.shields.io/badge/Developer-Tasian_Media-F78F20.svg)](https://www.tasian.media/)

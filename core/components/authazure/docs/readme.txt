@@ -1,8 +1,8 @@
 --------------------
 Extra: authAzure
 --------------------
-Version: 1.0.0-beta2
-Released: August 21, 2019
+Version: 1.0.0-beta3
+Released: November 27, 2019
 Since: August 22, 2018
 Author: David Pede  <dev@tasian.media> <https://twitter.com/davepede>
 Copyright: (C) 2019 David Pede. All rights reserved.
