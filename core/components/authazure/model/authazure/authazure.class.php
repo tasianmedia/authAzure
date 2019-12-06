@@ -40,6 +40,8 @@ class AuthAzure
             'defaultGroups' => $this->modx->getOption('authazure.default_groups'),
             'protectedGroups' => $this->modx->getOption('authazure.protected_groups'),
             'adGroupSync' => $this->modx->getOption('authazure.enable_group_sync'),
+            'profileImgDir' => $this->modx->getOption('authazure.profile_photo_dir') ?: $assetsUrl . 'web/profile_photos/',
+            'profileImgFqp' => $this->modx->getOption('authazure.profile_photo_dir') ? $this->modx->getOption('base_path') . $this->modx->getOption('authazure.profile_photo_dir') : $this->modx->getOption('assets_path') . 'components/authazure/web/profile_photos/',
         ), $config);
         $this->modx->addPackage('authazure', $this->config['modelPath']);
         require_once $this->config['vendorPath'] . 'autoload.php';
@@ -111,9 +113,10 @@ class AuthAzure
                     //get msgraph profile
                     $ad_profile = $this->getApi('https://graph.microsoft.com/beta/me', $this->accessToken['ms_graph'], $provider);
                     try {
-                        $ad_profile['photoUrl'] = $this->getProfilePhoto($ad_profile['mailNickname'], $this->accessToken['ms_graph'], $provider);
+                        $ad_profile['photoUrl'] = $this->getProfilePhoto($this->accessToken['ms_graph'], $provider);
                     } catch (Exception $e) {
                         $this->exceptionHandler($e);
+                        $ad_profile['photoUrl'] = '';
                     }
                     $user_data = array(
                         'id' => $uid,
@@ -188,9 +191,10 @@ class AuthAzure
                     //get active directory profile
                     $ad_profile = $this->getApi('https://graph.microsoft.com/beta/me', $this->accessToken['ms_graph'], $provider);
                     try {
-                        $ad_profile['photoUrl'] = $this->getProfilePhoto($ad_profile['mailNickname'], $this->accessToken['ms_graph'], $provider);
+                        $ad_profile['photoUrl'] = $this->getProfilePhoto($this->accessToken['ms_graph'], $provider);
                     } catch (Exception $e) {
                         $this->exceptionHandler($e);
+                        $ad_profile['photoUrl'] = '';
                     }
                     $user_data = array(
                         'username' => $username,
@@ -458,7 +462,7 @@ class AuthAzure
         }
         //error
         $message = $e->getMessage();
-        $error_id = 'AAZ' . uniqid();
+        $error_id = 'AAZ' . uniqid(); //todo only if fatal
         //azure ad error
         if ($e instanceof IdentityProviderException) {
             $trace = $e->getTrace();
@@ -553,24 +557,37 @@ class AuthAzure
     /**
      * Returns profile photo url
      *
-     * @param string $filename - Filename to use for saved image
-     * @param string $token - Access Token
+     * @param AccessToken $token - Access Token
      * @param Azure $provider - Provider Object
      *
      * @return string
      * @throws exception
      */
-    public function getProfilePhoto(string $filename, string $token, Azure $provider)
+    public function getProfilePhoto(AccessToken $token, Azure $provider)
     {
         try {
+            //filename
+            if (!$file = $token->getIdTokenClaims()['email']) {
+                throw new Exception("Cannot save user profile photo. Missing 'email' in idToken.");
+            }
+            //directory
+            if (!is_dir($this->config['profileImgFqp'])) {
+                $dir_perms = $this->modx->getOption('new_folder_permissions') ?? '0755';
+                if (!mkdir($this->config['profileImgFqp'],octdec($dir_perms), true)) {
+                    throw new Exception("Cannot save user profile photo. {$this->config['profileImgFqp']} directory could not be created.");
+                }
+            }
             $request = $provider->getAuthenticatedRequest('get', 'https://graph.microsoft.com/beta/me/photo/$value', $token);
             $response = $provider->getResponse($request);
             $body = $response->getBody();
-            $path = 'img/web/profile-photos/' . $filename . '.jpg'; //TODO fix so that filename is uid not custom
-            $photo = fopen($path, "w");
+            $path = $this->config['profileImgFqp'] . md5($file) . '.jpg';
+            $url = $this->config['profileImgDir'] . md5($file) . '.jpg';
+            if (!$photo = fopen($path, "w")) {
+                throw new Exception("Cannot save user profile photo. {$path} could not be opened.");
+            }
             fwrite($photo, $body);
             fclose($photo);
-            return $path;
+            return $url;
         } catch (Exception $e) {
             throw $e;
         }

@@ -122,6 +122,11 @@
         "type": "numberfield",
         "area": "Resources",
         "value": ""
+      },{
+        "key": "profile_photo_dir",
+        "type": "textfield",
+        "area": "User Profiles",
+        "value": ""
       }
     ]
   },

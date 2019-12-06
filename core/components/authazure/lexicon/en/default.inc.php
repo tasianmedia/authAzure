@@ -23,6 +23,9 @@ $_lang['setting_authazure.scopes_desc'] = 'A comma separated list of delegated p
 $_lang['setting_authazure.login_resource_id'] = 'Login Resource ID [REQUIRED]';
 $_lang['setting_authazure.login_resource_id_desc'] = 'The ID number of your login resource.';
 
+$_lang['setting_authazure.profile_photo_dir'] = 'User Profile Photo Directory';
+$_lang['setting_authazure.profile_photo_dir_desc'] = 'Path to directory where User Profile Photo files will be saved. Relative to MODX_BASE_DIR (generally your web root). Make sure this directory is writable by PHP.';
+
 $_lang['setting_authazure.enable_sso'] = 'Enable Single Sign-on';
 $_lang['setting_authazure.enable_sso_desc'] = 'If enabled all non mgr contexts will require user authentication unless overridden via context settings.';
 $_lang['setting_authazure.enable_seamless'] = 'Enable Seamless Sign-on';
