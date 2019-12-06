@@ -83,6 +83,11 @@
         "area": "Azure Configuration",
         "value": ""
       },{
+        "key": "scopes",
+        "type": "textfield",
+        "area": "Azure Configuration",
+        "value": "openid,email,profile,offline_access,https://graph.microsoft.com/User.Read,https://graph.microsoft.com/Directory.Read.All"
+      },{
         "key": "enable_sso",
         "type": "combo-boolean",
         "area": "Single Sign On",

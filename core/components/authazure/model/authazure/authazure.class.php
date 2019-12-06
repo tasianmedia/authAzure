@@ -65,10 +65,8 @@ class AuthAzure
         if (isset($id_token) && $id_token) {
             // Set critical
             $username = $id_token['email'];
-
+            //Request 'service to service' access tokens
             try {
-                //Gain access tokens
-                //TODO make on_behalf_of grants customisable via settings/cmp
                 //get msgraph api access token - uses code grant
                 $this->accessToken['ms_graph'] = $provider->getAccessToken('authorization_code', [
                     'code' => $id_token['code']
@@ -77,7 +75,7 @@ class AuthAzure
                 $this->exceptionHandler($e,true);
             }
             try {
-                //get api access token - on_behalf_of grant
+                //get s2s access tokens - on_behalf_of grant
                 if ($s2s = $this->modx->getOption('authazure.s2s_configs')) {
                     $s2s = json_decode($s2s);
                     foreach ($s2s as $name => $scopes) {
@@ -326,11 +324,7 @@ class AuthAzure
             $nonce = md5(rand());
             $authorizationUrl = $provider->getAuthorizationUrl([
                 //scope here sets what available in code used to gain access token
-                'scope' => [ //TODO move to sys setting
-                    'openid', 'email', 'profile', 'offline_access',
-                    'https://graph.microsoft.com/User.Read',
-                    'https://graph.microsoft.com/Directory.Read.All'
-                ],
+                'scope' => explode(',',$this->modx->getOption('authazure.scopes')),
                 'nonce' => $nonce
             ]);
             // Get the state generated for you and store it to the session.

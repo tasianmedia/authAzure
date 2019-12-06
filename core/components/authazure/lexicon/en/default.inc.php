@@ -17,6 +17,8 @@ $_lang['setting_authazure.openid_config_url'] = 'OpenID Connect Metadata';
 $_lang['setting_authazure.openid_config_url_desc'] = 'URL for your OpenID Connect metadata document';
 $_lang['setting_authazure.s2s_configs'] = 'Service-to-service Token Configurations';
 $_lang['setting_authazure.s2s_configs_desc'] = 'Service-to-service access token request parameters in JSON format - {"service1_name": ["scope1","scope2","scope3"],"service2_name": ["scope1","scope2","scope3"]}. Tokens generated here can be access using \'fetchToken()\' method.';
+$_lang['setting_authazure.scopes'] = 'Microsoft Graph API Scopes';
+$_lang['setting_authazure.scopes_desc'] = 'A comma separated list of delegated permissions to request from Microsoft Graph API. For more details see: https://docs.microsoft.com/en-us/graph/permissions-reference';
 
 $_lang['setting_authazure.login_resource_id'] = 'Login Resource ID [REQUIRED]';
 $_lang['setting_authazure.login_resource_id_desc'] = 'The ID number of your login resource.';
