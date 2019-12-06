@@ -98,7 +98,6 @@ class AuthAzure
                 try {
                     //user id
                     $uid = $user->get('id');
-
                     //save id_token to profile
                     //TODO do we need to save id_token to profile...?
                     /** @var AazProfile $aaz_profile */
@@ -111,7 +110,6 @@ class AuthAzure
                         ));
                     }
                     $aaz_profile->save();
-
                     //get msgraph profile
                     $ad_profile = $this->getApi('https://graph.microsoft.com/beta/me', $this->accessToken['ms_graph'], $provider);
                     try {
@@ -166,7 +164,7 @@ class AuthAzure
                         $login_data = [
                             'username' => $username,
                             'password' => md5(rand()),
-                            'rememberme' => false,
+                            'rememberme' => $this->modx->getOption('authazure.enable_cookie_lifetime') ?? false,
                             'login_context' => $this->config['ctx']
                         ];
                         $_SESSION['authAzure']['verified'] = true;
@@ -244,7 +242,7 @@ class AuthAzure
                     $login_data = [
                         'username' => $username,
                         'password' => md5(rand()),
-                        'rememberme' => false,
+                        'rememberme' => $this->modx->getOption('authazure.enable_cookie_lifetime') ?? false,
                         'login_context' => $this->config['ctx']
                     ];
                     $_SESSION['authAzure']['verified'] = true;

@@ -93,6 +93,11 @@
         "area": "Single Sign On",
         "value": "0"
       },{
+        "key": "enable_cookie_lifetime",
+        "type": "combo-boolean",
+        "area": "Single Sign On",
+        "value": "0"
+      },{
         "key": "enable_group_sync",
         "type": "modx-combo-usergroup",
         "area": "User Groups",
