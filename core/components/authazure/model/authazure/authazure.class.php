@@ -124,7 +124,7 @@ class AuthAzure
                         'email' => $ad_profile['mail'],
                         'photo' => $ad_profile['photoUrl'],
                         'defaultGroups' => $this->config['defaultGroups'],
-                        'active' => 1 //TODO fix active status
+                        'active' => $user->get('active') ?? 0
                     );
                     //sync active directory groups
                     if ($this->config['adGroupSync']) {
