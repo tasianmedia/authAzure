@@ -6,7 +6,7 @@ node_modules
 
 # ignore composer files
 composer.phar
-composer.lock
+# composer.lock
 
 # ignore yarn files
 yarn.lock
