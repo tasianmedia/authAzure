@@ -66,6 +66,9 @@ class AuthAzure
 
         if (isset($id_token) && $id_token) {
             // Set critical
+            if (empty($id_token['email'])) {
+                $this->exceptionHandler(new Exception("Missing 'email' claim in id_token. Check the 'email' scope is requested and the user has an email address."), true);
+            }
             $username = $id_token['email'];
             //Request 'service to service' access tokens
             try {
@@ -94,7 +97,7 @@ class AuthAzure
 
             // Check if new or existing user
             /** @var modUser $user */
-            if ($user = $this->modx->getObject('modUser', array('username' => $id_token['email']))) {
+            if ($user = $this->modx->getObject('modUser', array('username' => $username))) {
                 try {
                     //user id
                     $uid = $user->get('id');
@@ -164,7 +167,7 @@ class AuthAzure
                     if (!$user->isMember(explode(',', $this->config['protectedGroups']))) {
                         $login_data = [
                             'username' => $username,
-                            'password' => md5(rand()),
+                            'password' => bin2hex(random_bytes(16)),
                             'rememberme' => $this->modx->getOption('authazure.enable_cookie_lifetime') ?? false,
                             'login_context' => $this->config['ctx']
                         ];
@@ -243,7 +246,7 @@ class AuthAzure
 
                     $login_data = [
                         'username' => $username,
-                        'password' => md5(rand()),
+                        'password' => bin2hex(random_bytes(16)),
                         'rememberme' => $this->modx->getOption('authazure.enable_cookie_lifetime') ?? false,
                         'login_context' => $this->config['ctx']
                     ];
@@ -294,20 +297,59 @@ class AuthAzure
      */
     public function loadProvider()
     {
+        $openId = $this->parseOpenIdConfigUrl((string)$this->modx->getOption('authazure.openid_config_url'));
         $providerConfig = [
             'clientId' => $this->modx->getOption('authazure.client_id'),
             'clientSecret' => $this->modx->getOption('authazure.client_secret'),
             'redirectUri' => $this->modx->getOption('authazure.redirect_url'),
-            'metadata' => $this->modx->getOption('authazure.openid_config_url'),
-            'responseType' => 'id_token code',
-            'responseMode' => 'form_post',
+            'urlLogin' => $openId['urlLogin'],
+            'tenant' => $openId['tenant'],
+            'defaultEndPointVersion' => $openId['version'],
+            'scopes' => $this->getScopes(),
+            //never send the legacy 'resource' parameter (Azure AD Graph is retired)
+            'authWithResource' => false,
         ];
-        try {
-            $provider = new TheNetworg\OAuth2\Client\Provider\Azure($providerConfig);
-            return $provider;
-        } catch (Exception $e) {
-            throw $e;
+        return new Azure($providerConfig);
+    }
+
+    /**
+     * Splits the [[++authazure.openid_config_url]] system setting into the parts the provider needs.
+     * e.g. https://login.microsoftonline.com/{tenant}/v2.0/.well-known/openid-configuration
+     *
+     * @param string $url
+     *
+     * @return array{urlLogin: string, tenant: string, version: string}
+     * @throws Exception
+     */
+    public function parseOpenIdConfigUrl(string $url): array
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return [
+                'urlLogin' => 'https://login.microsoftonline.com/',
+                'tenant' => 'common',
+                'version' => Azure::ENDPOINT_VERSION_2_0,
+            ];
         }
+        if (!preg_match('#^(https://[^/]+/)([^/?]+)(/v2\.0)?/\.well-known/openid-configuration#i', $url, $m)) {
+            throw new Exception("Invalid OpenID Configuration URL '{$url}'. Expected format: https://login.microsoftonline.com/{tenant}/v2.0/.well-known/openid-configuration");
+        }
+        return [
+            'urlLogin' => $m[1],
+            'tenant' => $m[2],
+            'version' => !empty($m[3]) ? Azure::ENDPOINT_VERSION_2_0 : Azure::ENDPOINT_VERSION_1_0,
+        ];
+    }
+
+    /**
+     * Returns scopes from the [[++authazure.scopes]] system setting
+     *
+     * @return array
+     */
+    public function getScopes(): array
+    {
+        $scopes = explode(',', (string)$this->modx->getOption('authazure.scopes'));
+        return array_values(array_filter(array_map('trim', $scopes), 'strlen'));
     }
 
     /**
@@ -325,11 +367,13 @@ class AuthAzure
             throw new Exception($_REQUEST['error_description']);
         }
         if (!isset($_REQUEST['code'])) {
-            $nonce = md5(rand());
+            $nonce = bin2hex(random_bytes(16));
             $authorizationUrl = $provider->getAuthorizationUrl([
                 //scope here sets what available in code used to gain access token
-                'scope' => explode(',',$this->modx->getOption('authazure.scopes')),
-                'nonce' => $nonce
+                'scope' => $this->getScopes(),
+                'nonce' => $nonce,
+                'response_type' => 'id_token code',
+                'response_mode' => 'form_post',
             ]);
             // Get the state generated for you and store it to the session.
             $_SESSION['authAzure']['oauth2state'] = $provider->getState();
@@ -340,14 +384,14 @@ class AuthAzure
             $this->modx->sendRedirect($authorizationUrl);
             exit;
             // Check given state against previously stored one to mitigate CSRF attack
-        } elseif (!empty($_REQUEST['state']) && (isset($_SESSION['authAzure']['oauth2state']) && $_REQUEST['state'] == $_SESSION['authAzure']['oauth2state'])) {
+        } elseif (!empty($_REQUEST['state']) && isset($_SESSION['authAzure']['oauth2state']) && hash_equals((string)$_SESSION['authAzure']['oauth2state'], (string)$_REQUEST['state'])) {
             unset($_SESSION['authAzure']['oauth2state']);
             unset($_SESSION['authAzure']['active']);
             if (isset($_REQUEST['id_token'])) {
-                //decode and validate id_token received
-                $id_token = $provider->validateToken($_REQUEST['id_token']);
+                //decode and validate id_token received (signature, audience, issuer, lifetime)
+                $id_token = $provider->validateAccessToken($_REQUEST['id_token']);
                 //compare nonce
-                if (isset($_SESSION['authAzure']['oauth2nonce']) && $id_token['nonce'] == $_SESSION['authAzure']['oauth2nonce']) {
+                if (isset($_SESSION['authAzure']['oauth2nonce'], $id_token['nonce']) && hash_equals($_SESSION['authAzure']['oauth2nonce'], (string)$id_token['nonce'])) {
                     unset($_SESSION['authAzure']['oauth2nonce']);
                     //add in encoded id_token
                     $id_token['encoded'] = $_REQUEST['id_token'];
@@ -394,14 +438,15 @@ class AuthAzure
      *
      * @return string
      */
-    public function getActionUrl(string $action = null, bool $referer = true)
+    public function getActionUrl(?string $action = null, bool $referer = true)
     {
-        if ($_SERVER['HTTP_REFERER'] && $referer) {
+        if ($referer && !empty($_SERVER['HTTP_REFERER'])) {
             $request = preg_replace('#^' . $this->modx->getOption('base_url') . '#', '', strtok($_SERVER['HTTP_REFERER'], '?'));
+            $query_str = strtok(''); //gets the rest
         } else {
             $request = $this->modx->getOption('site_url');
+            $query_str = false;
         }
-        $query_str = strtok(''); //gets the rest
         if ($query_str !== false) {
             parse_str(html_entity_decode($query_str), $query_arr);
         } else {
@@ -428,7 +473,7 @@ class AuthAzure
      * @return string
      * @throws Exception
      */
-    public function getLogoutUrl(string $return_url = null, Azure $provider = null)
+    public function getLogoutUrl(?string $return_url = null, ?Azure $provider = null)
     {
         try {
             if (!$return_url) {
@@ -465,10 +510,14 @@ class AuthAzure
         $error_id = 'AAZ' . uniqid(); //todo only if fatal
         //azure ad error
         if ($e instanceof IdentityProviderException) {
-            $trace = $e->getTrace();
-            if ($azure_error = $trace[0]['args'][1]['error_description']) {
-                $message .= ' - ' . $azure_error;
-            };
+            $body = $e->getResponseBody();
+            if (!is_array($body)) {
+                $body = json_decode((string)$body, true);
+            }
+            if (is_array($body) && !empty($body['error_description']) && is_string($body['error_description'])
+                && strpos($message, $body['error_description']) === false) {
+                $message .= ' - ' . $body['error_description'];
+            }
         }
         $message .= PHP_EOL . 'Error ID: ' . $error_id;
         //log error
@@ -502,7 +551,9 @@ class AuthAzure
             }
             $uid = $user->get('id');
             /** @var AccessToken $token */
-            if ($token = unserialize($this->modx->cacheManager->get($uid . $name, array(xPDO::OPT_CACHE_KEY => 'aaz')))) {
+            $cached = $this->modx->cacheManager->get($uid . $name, array(xPDO::OPT_CACHE_KEY => 'aaz'));
+            $token = is_string($cached) ? unserialize($cached, ['allowed_classes' => [AccessToken::class]]) : false;
+            if ($token instanceof AccessToken) {
                 if ($token->hasExpired()) {
                     if ($refresh_token = $token->getRefreshToken()) {
                         try {
@@ -536,22 +587,21 @@ class AuthAzure
      * Returns Microsoft Graph response
      *
      * @param string $url - API Endpoint URL
-     * @param string $token - Access Token
+     * @param AccessToken|string $token - Access Token
      * @param Azure $provider - Provider Object
      *
      * @return array
      * @throws exception
      */
-    public function getApi(string $url, string $token, Azure $provider)
+    public function getApi(string $url, AccessToken|string $token, Azure $provider)
     {
-        try {
-            $request = $provider->getAuthenticatedRequest('get', $url, $token);
-            $response = $provider->getResponse($request);
-            $body = $response->getBody();
-            return json_decode($body, true);
-        } catch (Exception $e) {
-            throw $e;
+        $request = $provider->getAuthenticatedRequest('GET', $url, $token);
+        $response = $provider->getResponse($request);
+        $data = json_decode((string)$response->getBody(), true);
+        if (!is_array($data)) {
+            throw new Exception("Invalid response received from '{$url}'.");
         }
+        return $data;
     }
 
     /**
@@ -567,7 +617,7 @@ class AuthAzure
     {
         try {
             //filename
-            if (!$file = $token->getIdTokenClaims()['email']) {
+            if (!$file = ($token->getIdTokenClaims()['email'] ?? null)) {
                 throw new Exception("Cannot save user profile photo. Missing 'email' in idToken.");
             }
             //directory
@@ -577,16 +627,14 @@ class AuthAzure
                     throw new Exception("Cannot save user profile photo. {$this->config['profileImgFqp']} directory could not be created.");
                 }
             }
-            $request = $provider->getAuthenticatedRequest('get', 'https://graph.microsoft.com/beta/me/photo/$value', $token);
+            $request = $provider->getAuthenticatedRequest('GET', 'https://graph.microsoft.com/beta/me/photo/$value', $token);
             $response = $provider->getResponse($request);
-            $body = $response->getBody();
+            $body = (string)$response->getBody();
             $path = $this->config['profileImgFqp'] . md5($file) . '.jpg';
             $url = $this->config['profileImgDir'] . md5($file) . '.jpg';
-            if (!$photo = fopen($path, "w")) {
-                throw new Exception("Cannot save user profile photo. {$path} could not be opened.");
+            if (file_put_contents($path, $body) === false) {
+                throw new Exception("Cannot save user profile photo. {$path} could not be written.");
             }
-            fwrite($photo, $body);
-            fclose($photo);
             return $url;
         } catch (Exception $e) {
             throw $e;

@@ -1,5 +1,15 @@
 Changelog for authAzure.
 
+authAzure 1.0.0-beta6 (unreleased)
+====================================
+- Require PHP 8.4 or later
+- Update thenetworg/oauth2-azure to ^2.2.6 (firebase/php-jwt 7, guzzle 8)
+- id_token signature is now verified with RS256 only (fixes HS256 algorithm confusion)
+- Fix PHP 8.4 implicit nullable parameter deprecations
+- Fix undefined array key warnings (HTTP_REFERER, authAzure_action, default group role/rank)
+- Use cryptographically secure nonce and login password
+- Read Azure AD error description from IdentityProviderException response body
+
 authAzure 1.0.0-beta5 (February 11, 2020)
 ====================================
 - Add composer.lock to GIT

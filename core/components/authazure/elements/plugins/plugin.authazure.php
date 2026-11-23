@@ -12,7 +12,7 @@ switch ($modx->event->name) {
     case 'OnHandleRequest':
         if ($modx->context->key !== 'mgr') {
             if ($modx->user->isAuthenticated($modx->context->key)) {
-                if (!$modx->user->active || $modx->user->Profile->blocked) {
+                if (!$modx->user->get('active') || !$modx->user->Profile || $modx->user->Profile->get('blocked')) {
                     $modx->runProcessor('security/logout');
                     $modx->sendRedirect($modx->makeUrl($modx->getOption('site_start'), '', '', 'full'));
                 }
@@ -48,7 +48,7 @@ switch ($modx->event->name) {
                     if (isset($_SESSION['authAzure']['active']) && $_SESSION['authAzure']['active'] === true) {
                         $authAzure->Login();
                     } else {
-                        switch ($_REQUEST['authAzure_action']) {
+                        switch ($_REQUEST['authAzure_action'] ?? '') {
                             case 'login':
                                 $authAzure->Login();
                                 break;

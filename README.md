@@ -3,7 +3,7 @@
 
 [![Version](https://img.shields.io/badge/Release-v1.0.0_beta5-F78F20.svg)](https://github.com/prpgraphics/knetTheme/releases)
 [![MODX Version](https://img.shields.io/badge/MODX-v2.6.x-F78F20.svg)](https://modx.com/download)
-![PHP](https://img.shields.io/badge/PHP-v7.x-F78F20.svg)
+![PHP](https://img.shields.io/badge/PHP-v8.4%2B-F78F20.svg)
 [![MODX Extra by Tasian Media](https://img.shields.io/badge/Developer-Tasian_Media-F78F20.svg)](https://www.tasian.media/)
 
 ### Installation
