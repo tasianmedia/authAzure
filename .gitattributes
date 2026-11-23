@@ -1,0 +1,4 @@
+# Normalize all text files to LF in the repo and on checkout (all platforms).
+# The code runs on a Linux server and is served straight from the checkout,
+# so working-tree files must be LF even when edited from Windows IDEs.
+* text=auto eol=lf
