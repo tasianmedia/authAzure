@@ -1,6 +1,6 @@
 Changelog for authAzure.
 
-authAzure 1.0.0-beta6 (unreleased)
+authAzure 1.0.0-beta6 (November 23, 2026)
 ====================================
 - Require PHP 8.4 or later
 - Update thenetworg/oauth2-azure to ^2.2.6 (firebase/php-jwt 7, guzzle 8)
