@@ -45,7 +45,7 @@ class authAzureUserCreateProcessor extends modUserCreateProcessor
         if ($defaultGroups !== null) {
             $defaultGroups = explode(',', $defaultGroups);
             foreach ($defaultGroups as $tmp) {
-                @list($group, $role, $rank) = explode(':', $tmp);
+                [$group, $role, $rank] = array_pad(explode(':', trim($tmp), 3), 3, null);
                 if (empty($role)) {
                     $role = 1;
                 }

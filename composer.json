@@ -1,9 +1,14 @@
 {
   "config": {
-    "vendor-dir": "core/components/authazure/vendors"
+    "vendor-dir": "core/components/authazure/vendors",
+    "platform": {
+      "php": "8.4.0"
+    }
   },
   "require": {
-    "thenetworg/oauth2-azure": "v2.0.0.x-dev",
-    "ext-json": "*"
+    "php": ">=8.4",
+    "ext-json": "*",
+    "ext-openssl": "*",
+    "thenetworg/oauth2-azure": "^2.2.6"
   }
 }
