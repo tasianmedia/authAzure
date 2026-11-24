@@ -311,6 +311,23 @@ class AuthAzure
     }
 
     /**
+     * Returns the scopes of an s2s token from the [[++authazure.s2s_configs]] system setting
+     * (JSON: token name => scopes), or an empty array if the token isn't an s2s token
+     *
+     * @param string $name - Token name, e.g. 'prp_api'
+     *
+     * @return array
+     */
+    public function getS2sScopes(string $name): array
+    {
+        $s2s = json_decode((string)$this->modx->getOption('authazure.s2s_configs'), true);
+        if (!is_array($s2s) || !isset($s2s[$name]) || !is_array($s2s[$name])) {
+            return [];
+        }
+        return array_values(array_filter(array_map('trim', array_filter($s2s[$name], 'is_string')), 'strlen'));
+    }
+
+    /**
      * Authenticates the user against provider and returns verified id_token
      *
      * @param Azure $provider - Provider Object
@@ -506,10 +523,14 @@ class AuthAzure
                 if ($token->hasExpired()) {
                     if ($refresh_token = $token->getRefreshToken()) {
                         try {
-                            //refresh
-                            $token = $this->loadProvider()->getAccessToken('refresh_token', [
-                                'refresh_token' => $refresh_token
-                            ]);
+                            //refresh, for the same API as the original token: without a scope the
+                            //provider asks for its default (sign-in) scopes, which turns an s2s token
+                            //into a Microsoft Graph token its API rejects
+                            $options = ['refresh_token' => $refresh_token];
+                            if ($scopes = $this->getS2sScopes($name)) {
+                                $options['scope'] = implode(' ', $scopes);
+                            }
+                            $token = $this->loadProvider()->getAccessToken('refresh_token', $options);
                             //save
                             $refreshed_token = serialize($token);
                             $this->modx->cacheManager->set($uid . $name, $refreshed_token, 0, array(xPDO::OPT_CACHE_KEY => 'aaz'));
