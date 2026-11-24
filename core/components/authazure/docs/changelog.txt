@@ -1,5 +1,9 @@
 Changelog for authAzure.
 
+authAzure 1.0.0-rc1 (November 24, 2026)
+====================================
+- First release candidate for 1.0.0 (no functional changes since beta6)
+
 authAzure 1.0.0-beta6 (November 23, 2026)
 ====================================
 - Require PHP 8.4 or later
