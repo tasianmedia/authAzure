@@ -5,7 +5,7 @@ Version: 1.0.0-rc1
 Released: November 24, 2026
 Since: August 22, 2018
 Author: David Pede  <dev@tasian.media> <https://twitter.com/davepede>
-Copyright: (C) 2020 David Pede. All rights reserved.
+Copyright: (C) 2018-2026 David Pede. All rights reserved.
 
 An Azure Active Directory Extra for MODX Revolution.
 

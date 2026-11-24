@@ -1,7 +1,7 @@
 # authAzure 1.0.0-rc1
 ### An Azure Active Directory Extra for MODX Revolution.
 
-[![Version](https://img.shields.io/badge/Release-v1.0.0_rc1-F78F20.svg)](https://github.com/prpgraphics/knetTheme/releases)
+[![Version](https://img.shields.io/badge/Release-v1.0.0_rc1-F78F20.svg)](https://github.com/tasianmedia/authazure/releases)
 [![MODX Version](https://img.shields.io/badge/MODX-v2.6.x-F78F20.svg)](https://modx.com/download)
 ![PHP](https://img.shields.io/badge/PHP-v8.4%2B-F78F20.svg)
 [![MODX Extra by Tasian Media](https://img.shields.io/badge/Developer-Tasian_Media-F78F20.svg)](https://www.tasian.media/)
@@ -27,7 +27,7 @@ If you have a contribution and would like to submit a Pull Request, please be su
 ### Details
 Author: David Pede (dev@tasian.media) (https://twitter.com/davepede)
 
-Copyright: (C) 2020 Tasian Media. All rights reserved. (dev@tasian.media)
+Copyright: (C) 2018-2026 Tasian Media. All rights reserved. (dev@tasian.media)
 
 ### Please Note
 authAzure is not associated with or endorsed by Microsoft Corporation.
