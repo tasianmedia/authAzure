@@ -17,3 +17,8 @@ _dev/
 
 # ignore composer vendor dir
 /core/components/authazure/vendors
+
+# ignore claude code files
+CLAUDE.md
+CLAUDE.local.md
+.claude/
